@@ -23,9 +23,20 @@ SERVICES = os.path.join(ROOT, "sync", "abroad-services.list")
 NETWORKS = os.path.join(ROOT, "sync", "abroad-networks.list")
 RULESETS = os.path.join(ROOT, "sync", "rulesets.list")
 
-# Готовые списки блокировок. Содержат и домены, и подсети, обновляются
-# автором автоматически. sing-box скачивает их сам по update_interval.
-RULESET_URL = "https://raw.githubusercontent.com/vernette/rulesets/master/srs/{}.srs"
+# Источники готовых наборов. sing-box скачивает их сам по update_interval.
+#
+# vernette   — заточен под Россию: «недоступно из РФ», реестр РКН и сервисы
+#              с учётом местной специфики. Содержит и домены, и подсети,
+#              поэтому покрывает протоколы без SNI (Telegram MTProto).
+# metacubex  — meta-rules-dat, ~4.7k звёзд. Глобальный посервисный каталог,
+#              сотни наборов. Берётся ради гранулярности: отдельно Netflix,
+#              отдельно Steam, отдельно apple-music и apple-update.
+#
+# В rulesets.list запись имеет вид «источник:набор».
+SOURCES = {
+    "vernette": ("https://raw.githubusercontent.com/vernette/rulesets/master/srs/{}.srs", "vr"),
+    "metacubex": ("https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/{}.srs", "mc"),
+}
 RULESET_UPDATE = "1d"
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
@@ -114,24 +125,35 @@ def load_rulesets():
     Файл rulesets.list работает как набор галочек: строка раскомментирована —
     список включён. Ничего, кроме этого файла, править не нужно.
     """
-    tags = []
+    entries = []
     with open(RULESETS) as fh:
         for line in fh:
             line = line.split("#", 1)[0].strip()
-            if line:
-                tags.append(line)
-    tags = sorted(set(tags))
-    sets = [
-        {
+            if not line:
+                continue
+            source, _, name = line.partition(":")
+            if not name:                       # запись без источника — vernette
+                source, name = "vernette", source
+            if source not in SOURCES:
+                sys.exit(f"ОШИБКА: неизвестный источник '{source}' в {RULESETS}")
+            entries.append((source, name))
+
+    entries = sorted(set(entries))
+    sets, tags = [], []
+    for source, name in entries:
+        url_tpl, prefix = SOURCES[source]
+        # Префикс в теге обязателен: у источников есть одноимённые наборы
+        # (netflix, telegram), и без него они бы затёрли друг друга.
+        tag = f"{prefix}-{name}"
+        tags.append(tag)
+        sets.append({
             "type": "remote",
-            "tag": t,
+            "tag": tag,
             "format": "binary",
-            "url": RULESET_URL.format(t),
+            "url": url_tpl.format(name),
             "download_detour": "direct",
             "update_interval": RULESET_UPDATE,
-        }
-        for t in tags
-    ]
+        })
     return sets, tags
 
 
