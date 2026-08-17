@@ -31,15 +31,29 @@ SUB_FILE = os.path.join(ROOT, "secrets", "backup-subscription.txt")
 OUT_FILE = os.path.join(ROOT, "vm", "sing-box", "backup-outbounds.json")
 
 TIMEOUT = 45
-UA = "v2rayNG/1.8.5"   # некоторые панели отдают подписку только «известным» клиентам
+
+# Панели отдают РАЗНОЕ содержимое в зависимости от User-Agent: одному клиенту
+# ссылки, другому готовый sing-box JSON, третьему clash-YAML. Незнакомому
+# агенту часто достаётся заглушка. Проверено на shadowq.cc: v2rayNG и Happ
+# получали 320 байт, SFI — JSON, clash-verge — 67 КБ YAML.
+# Поэтому перебираем агенты и берём ответ, где серверов оказалось больше.
+AGENTS = [
+    "clash-verge/1.5.0",   # обычно самый полный ответ
+    "ClashMeta/1.0",
+    "SFI/1.0",             # нативный sing-box JSON
+    "sing-box/1.13.0",
+    "Happ/1.0",
+    "v2rayNG/1.8.5",
+    "Streisand/1.0",
+]
 
 
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
-def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+def fetch(url, ua):
+    req = urllib.request.Request(url, headers={"User-Agent": ua})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         return resp.read().decode("utf-8", "replace")
 
@@ -168,6 +182,68 @@ PARSERS = {"vless": parse_vless, "trojan": parse_trojan, "ss": parse_ss}
 DEAD_HOSTS = {"0.0.0.0", "127.0.0.1", "::", "::1", "localhost", "example.com"}
 
 
+def from_singbox_json(text, used):
+    """Панель отдала готовый конфиг sing-box — берём из него серверы."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    out = []
+    for ob in data.get("outbounds", []):
+        if ob.get("type") in ("vless", "vmess", "trojan", "shadowsocks", "hysteria2"):
+            ob = dict(ob)
+            ob["tag"] = safe_tag(str(ob.get("tag") or ob.get("server", "node")), used)
+            ob.pop("domain_resolver", None)   # свой резолвер задаётся у нас
+            out.append(ob)
+    return out
+
+
+def from_clash_yaml(text, used):
+    """Разбор clash-YAML без внешних библиотек.
+
+    Полноценный YAML-парсер не нужен: секция proxies — это плоский список
+    словарей, и панели пишут его однообразно. Берём только то, что умеем
+    отобразить в sing-box, остальное молча пропускаем.
+    """
+    if "proxies:" not in text:
+        return None
+    block = text.split("proxies:", 1)[1]
+    block = re.split(r"\n(?=[a-zA-Z-]+:)", block)[0]
+
+    out = []
+    for chunk in re.findall(r"^\s*-\s*(\{.*?\}|(?:.*\n(?:\s{2,}.*\n)*))", block, re.M):
+        fields = dict(re.findall(r"([a-zA-Z-]+)\s*:\s*['\"]?([^,'\"\n\}]+)", chunk))
+        typ, server = fields.get("type"), fields.get("server")
+        port = fields.get("port", "").strip()
+        if not typ or not server or not port.isdigit():
+            continue
+        tag = safe_tag(fields.get("name", server), used)
+        if typ == "vless":
+            ob = {"type": "vless", "tag": tag, "server": server.strip(),
+                  "server_port": int(port), "uuid": fields.get("uuid", "")}
+            if fields.get("flow"):
+                ob["flow"] = fields["flow"].strip()
+            if fields.get("reality-opts") or fields.get("public-key"):
+                ob["tls"] = {"enabled": True,
+                             "server_name": fields.get("servername", server).strip(),
+                             "reality": {"enabled": True,
+                                         "public_key": fields.get("public-key", "").strip()}}
+            elif fields.get("tls", "").strip() in ("true", "yes"):
+                ob["tls"] = {"enabled": True,
+                             "server_name": fields.get("servername", server).strip()}
+            out.append(ob)
+        elif typ == "trojan":
+            out.append({"type": "trojan", "tag": tag, "server": server.strip(),
+                        "server_port": int(port), "password": fields.get("password", ""),
+                        "tls": {"enabled": True,
+                                "server_name": fields.get("sni", server).strip()}})
+        elif typ == "ss":
+            out.append({"type": "shadowsocks", "tag": tag, "server": server.strip(),
+                        "server_port": int(port), "method": fields.get("cipher", ""),
+                        "password": fields.get("password", "")})
+    return out
+
+
 def usable(ob):
     if not ob:
         return False
@@ -204,30 +280,46 @@ def main():
             write([])
         return
 
-    text = maybe_b64(fetch(url))
-    used, outbounds, skipped = set(), [], 0
-    for line in text.splitlines():
-        line = line.strip()
-        if "://" not in line:
-            continue
-        scheme = line.split("://", 1)[0].lower()
-        parser = PARSERS.get(scheme)
-        if not parser:
-            skipped += 1
-            continue
+    best, best_ua, skipped = [], None, 0
+    for ua in AGENTS:
+        used = set()
         try:
-            ob = parser(line, used)
-        except Exception:
-            ob = None
-        if usable(ob):
-            outbounds.append(ob)
-        else:
-            skipped += 1
-            if ob:
-                log(f"  отброшен нерабочий адрес: {ob.get('server')}:{ob.get('server_port')}"
-                    f" ({ob.get('tag')})")
+            raw = fetch(url, ua)
+        except Exception as exc:
+            log(f"  {ua}: не ответил ({str(exc)[:40]})")
+            continue
 
-    log(f"серверов пригодных: {len(outbounds)}, отброшено: {skipped}")
+        got = from_singbox_json(raw, used)
+        if got is None:
+            got = from_clash_yaml(raw, used)
+        if got is None:
+            got = []
+            for line in maybe_b64(raw).splitlines():
+                line = line.strip()
+                if "://" not in line:
+                    continue
+                parser = PARSERS.get(line.split("://", 1)[0].lower())
+                if not parser:
+                    continue
+                try:
+                    ob = parser(line, used)
+                except Exception:
+                    ob = None
+                if ob:
+                    got.append(ob)
+
+        alive = [o for o in got if usable(o)]
+        dead = len(got) - len(alive)
+        log(f"  {ua:20} получено {len(got):>3}, пригодно {len(alive):>3}"
+            + (f", заглушек {dead}" if dead else ""))
+        skipped = max(skipped, dead)   # чтобы счётчик не терялся при нулевом улове
+        if len(alive) > len(best):
+            best, best_ua = alive, ua
+
+    outbounds = best
+    if best_ua:
+        log(f"выбран ответ для {best_ua}")
+    log(f"серверов пригодных: {len(outbounds)}, отброшено заглушек: {skipped}")
     if not outbounds and skipped:
         log("ВНИМАНИЕ: в подписке нет ни одного рабочего сервера. "
             "Обычно это значит, что она неактивна — проверьте у провайдера.")
