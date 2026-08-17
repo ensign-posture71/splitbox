@@ -93,6 +93,44 @@ notion.site
 figma.com
 canva.com
 
+# --- Мессенджеры [РФ] --------------------------------------------------------
+whatsapp.com
+whatsapp.net
+telegram.org
+telegram.me
+t.me
+telesco.pe
+tdesktop.com
+
+# --- Аниме и медиа [РФ] ------------------------------------------------------
+anilibria.tv
+anilibria.top
+anilib.me
+animego.org
+animego.me
+myanimelist.net
+cdn.myanimelist.net
+lostfilm.tv
+lostfilm.download
+rezka.ag
+hdrezka.ag
+nnmclub.to
+
+# --- Прочее со скриншота -----------------------------------------------------
+grok.com
+manus.im
+notepad-plus-plus.org
+pornhub.com
+phncdn.com
+
+# --- FaceTime [ОН] -----------------------------------------------------------
+# Точечно, БЕЗ blanket apple.com (решение владельца остаётся в силе):
+# заворачиваются только домены, через которые идут установление звонка
+# и пуш-уведомления, а не App Store с iCloud.
+facetime.apple.com
+init.ess.apple.com
+courier.push.apple.com
+
 # --- Кандидаты, требующие решения владельца ----------------------------------
 # Раскомментировать осознанно — у каждого своя цена.
 #
