@@ -74,9 +74,16 @@
         "ip_is_private": true,
         "outbound": "direct",
         "//": "Предохранитель: внутрисетевое никогда не уходит в туннель."
+      },
+      {
+        "domain": "${SERVICES_EXACT}",
+        "domain_suffix": "${SERVICES_SUFFIX}",
+        "outbound": "reality-out",
+        "//": "Ступень 2 схемы D16. Роутер стерит грубо по IP и присылает сюда лишних попутчиков — например весь Cloudflare, если на его адресе живёт один нужный сервис. Здесь по снятому SNI остаётся только то, что действительно в списке. Оба поля заполняются из sync/abroad-services.list при сборке конфига."
       }
     ],
-    "final": "reality-out",
+    "final": "direct",
+    "//final": "direct, а НЕ reality-out: всё, что не совпало по домену, возвращается напрямую. Цена ошибки роутера — лишний хоп внутри LAN вместо рейса в Нидерланды.",
     "auto_detect_interface": true,
     "default_domain_resolver": "dns-endpoint",
     "//default_domain_resolver": "Обязателен начиная с sing-box 1.12: без него проверка падает с deprecation-фаталом. Задаёт резолвер по умолчанию для всех исходящих соединений.",

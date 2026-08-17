@@ -19,8 +19,29 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = os.path.join(ROOT, "secrets", "reality-vps.env")
 TPL = os.path.join(ROOT, "vm", "sing-box", "config.template.json")
+SERVICES = os.path.join(ROOT, "sync", "abroad-services.list")
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
+
+
+def load_services():
+    """Список сервисов -> два массива для правила маршрутизации sing-box.
+
+    Точное совпадение и суффикс задаются раздельно намеренно: голый
+    domain_suffix="openai.com" совпал бы и с "myopenai.com". Точка впереди
+    делает совпадение по границе метки.
+    """
+    domains = []
+    with open(SERVICES) as fh:
+        for line in fh:
+            line = line.split("#", 1)[0].strip().lower()
+            if line:
+                domains.append(line)
+    domains = sorted(set(domains))
+    return {
+        "SERVICES_EXACT": domains,
+        "SERVICES_SUFFIX": ["." + d for d in domains],
+    }
 
 
 def load_env(path):
@@ -55,6 +76,9 @@ def render(node, env):
             if name not in env:
                 sys.exit(f"ОШИБКА: в {ENV} нет переменной {name}")
             val = env[name]
+            if isinstance(val, list):
+                # Подстановка массива (списки сервисов) — не строковое значение.
+                return val, True
             if val == "":
                 return None, False
             return (int(val) if val.isdigit() else val), True
@@ -63,6 +87,12 @@ def render(node, env):
 
 def main():
     env = load_env(ENV)
+    services = load_services()
+    if not services["SERVICES_EXACT"]:
+        sys.exit(f"ОШИБКА: {SERVICES} пуст — конфиг без списка сервисов "
+                 "отправил бы весь трафик напрямую")
+    env.update(services)
+
     with open(TPL) as fh:
         template = json.load(fh)
 
