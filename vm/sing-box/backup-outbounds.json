@@ -1,0 +1,376 @@
+[
+  {
+    "type": "vless",
+    "tag": "bk-est40",
+    "server": "est40.shadowq.cc",
+    "server_port": 8443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "tallinn.ee",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-est200",
+    "server": "est200.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-am",
+    "server": "am.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-fin",
+    "server": "fin.shadowq.cc",
+    "server_port": 8443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "Xk-Ze7wybNZS4bO4oahR8kvd2KAlhyohZYQK6btGGj4",
+        "short_id": "b3a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-swe2",
+    "server": "swe2.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-pl",
+    "server": "pl.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-nl",
+    "server": "nl.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-georgia",
+    "server": "georgia.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "qq"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-spain",
+    "server": "spain.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-cz",
+    "server": "cz.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-de2",
+    "server": "de2.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-de2-2",
+    "server": "de2.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-de",
+    "server": "de.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-de3",
+    "server": "de3.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-bulgaria",
+    "server": "bulgaria.shadowq.cc",
+    "server_port": 4443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-usa",
+    "server": "usa.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  },
+  {
+    "type": "vless",
+    "tag": "bk-turkey",
+    "server": "turkey.shadowq.cc",
+    "server_port": 443,
+    "uuid": "eeb2afc0-91b9-470e-85de-60cfbf6bc5a5",
+    "packet_encoding": "xudp",
+    "flow": "xtls-rprx-vision",
+    "tls": {
+      "enabled": true,
+      "server_name": "stackoverflow.com",
+      "utls": {
+        "enabled": true,
+        "fingerprint": "firefox"
+      },
+      "reality": {
+        "enabled": true,
+        "public_key": "B3hJ-HdMFRzN5TlkBgSBMMmD93kllvgPuTOCgWzR9U8",
+        "short_id": "b1a658e3128ee59f"
+      }
+    }
+  }
+]

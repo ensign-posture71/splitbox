@@ -52,8 +52,37 @@ def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+def hwid_headers():
+    """Заголовки привязки к устройству (Remnawave).
+
+    Без них панель отдаёт заглушку «Напиши в поддержку» вместо серверов —
+    в ответе это видно по X-Hwid-Not-Supported: true. Happ такие заголовки
+    шлёт, обычный HTTP-клиент нет.
+
+    Идентификатор постоянный и лежит в secrets/hwid.env: меняющийся занимал бы
+    новый слот устройства при каждом запросе и быстро исчерпал бы лимит.
+    """
+    path = os.path.join(ROOT, "secrets", "hwid.env")
+    if not os.path.exists(path):
+        return {}
+    hwid = ""
+    for line in open(path):
+        if line.startswith("HWID="):
+            hwid = line.split("=", 1)[1].strip()
+    if not hwid:
+        return {}
+    return {
+        "x-hwid": hwid,
+        "x-device-os": "Linux",
+        "x-ver-os": "Debian 13",
+        "x-device-model": "singbox-gw",
+    }
+
+
 def fetch(url, ua):
-    req = urllib.request.Request(url, headers={"User-Agent": ua})
+    headers = {"User-Agent": ua}
+    headers.update(hwid_headers())
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         return resp.read().decode("utf-8", "replace")
 
@@ -73,9 +102,17 @@ def maybe_b64(text):
     return text
 
 
-def safe_tag(name, used):
-    """Тег должен быть уникальным и пригодным для ссылки из правил."""
-    base = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-").lower() or "node"
+def safe_tag(name, used, fallback=""):
+    """Тег должен быть уникальным и пригодным для ссылки из правил.
+
+    Имена профилей в подписках состоят из эмодзи и кириллицы, которые здесь
+    срезаются подчистую — без запасного варианта все теги вырождались
+    в bk-node, bk-node-2 и так далее, и по логу было не понять, какой
+    сервер выбран. Поэтому запасной вариант — имя хоста.
+    """
+    base = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-").lower()
+    if not base or base.isdigit():
+        base = re.sub(r"[^A-Za-z0-9_.-]+", "-", fallback).strip("-").lower() or "node"
     base = f"bk-{base[:40]}"
     tag, n = base, 2
     while tag in used:
@@ -89,9 +126,15 @@ def parse_vless(url, used):
     q = dict(urllib.parse.parse_qsl(p.query))
     if not p.hostname or not p.username:
         return None
+    name = urllib.parse.unquote(p.fragment or "")
+    # Тот же отбор, что и для остальных форматов: узлы «LTE обход» стоят
+    # на российских адресах и по задержке выигрывают у зарубежных, поэтому
+    # группа автовыбора предпочла бы их — и трафик «за рубеж» остался бы в РФ.
+    if SKIP_PROFILE.search(name):
+        return None
     ob = {
         "type": "vless",
-        "tag": safe_tag(urllib.parse.unquote(p.fragment or p.hostname), used),
+        "tag": safe_tag(name, used, fallback=p.hostname.split(".")[0]),
         "server": p.hostname,
         "server_port": p.port or 443,
         "uuid": p.username,
@@ -188,13 +231,27 @@ def from_singbox_json(text, used):
         data = json.loads(text)
     except json.JSONDecodeError:
         return None
+    if not isinstance(data, dict):
+        return None          # список — это формат xray, им занимается другой разбор
     out = []
     for ob in data.get("outbounds", []):
-        if ob.get("type") in ("vless", "vmess", "trojan", "shadowsocks", "hysteria2"):
-            ob = dict(ob)
-            ob["tag"] = safe_tag(str(ob.get("tag") or ob.get("server", "node")), used)
-            ob.pop("domain_resolver", None)   # свой резолвер задаётся у нас
-            out.append(ob)
+        if ob.get("type") not in ("vless", "vmess", "trojan", "shadowsocks", "hysteria2"):
+            continue
+        name = str(ob.get("tag") or "")
+        # Тот же фильтр, что и для xray-формата: «LTE обход» — это входные
+        # узлы на российских адресах, а «Россия → X» — цепочки со входом в РФ.
+        # Для задачи «за рубеж» они не годятся, а по задержке выигрывали бы
+        # у зарубежных и перетягивали трафик на себя.
+        if SKIP_PROFILE.search(name):
+            continue
+        ob = dict(ob)
+        # Запасное имя — хост: теги в подписке состоят из эмодзи и кириллицы
+        # и после очистки вырождаются в «node», по которому в логе ничего
+        # не понять.
+        ob["tag"] = safe_tag(name, used,
+                             fallback=str(ob.get("server", "")).split(".")[0])
+        ob.pop("domain_resolver", None)   # свой резолвер задаётся у нас
+        out.append(ob)
     return out
 
 
@@ -244,6 +301,95 @@ def from_clash_yaml(text, used):
     return out
 
 
+# Профили, которые НЕ берём в резерв. Подписка отдаёт не только зарубежные
+# выходы: «LTE обход» — это входные узлы на российских адресах для обхода
+# замедления у мобильных операторов, а «Россия → X» — цепочки со входом в РФ.
+# Для задачи «за рубеж» нужен зарубежный выход, поэтому такие профили
+# пропускаются: иначе группа автовыбора могла бы предпочесть их по задержке
+# (они ближе!) и трафик остался бы в России.
+SKIP_PROFILE = re.compile(r"LTE|Росси\w*\s*→|Hysteria", re.I)
+
+
+def from_xray_json(text, used):
+    """Разбор конфига Xray/V2Ray в outbound'ы sing-box.
+
+    Именно этот формат отдаёт панель Remnawave клиенту с HWID. Адрес сервера
+    лежит не в `server`, как у sing-box, а в settings.vnext[0] — из-за чего
+    первая версия разборщика видела «0 серверов с адресом».
+    """
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    profiles = data if isinstance(data, list) else [data]
+    if not profiles or not isinstance(profiles[0], dict):
+        return None
+    if "outbounds" not in profiles[0]:
+        return None
+
+    out, seen = [], set()
+    for cfg in profiles:
+        remark = str(cfg.get("remarks", ""))
+        if SKIP_PROFILE.search(remark):
+            continue
+        for o in cfg.get("outbounds", []):
+            if (o.get("protocol") or o.get("type")) != "vless":
+                continue
+            vnext = (o.get("settings") or {}).get("vnext") or []
+            if not vnext:
+                continue
+            node, users = vnext[0], (vnext[0].get("users") or [{}])
+            key = (node.get("address"), node.get("port"))
+            if key in seen or not key[0]:
+                continue
+            seen.add(key)
+
+            ss = o.get("streamSettings") or {}
+            ob = {
+                "type": "vless",
+                "tag": safe_tag(remark, used, fallback=str(node["address"]).split(".")[0]),
+                "server": node["address"],
+                "server_port": int(node["port"]),
+                "uuid": users[0].get("id", ""),
+                "packet_encoding": "xudp",
+            }
+            if users[0].get("flow"):
+                ob["flow"] = users[0]["flow"]
+
+            sec = ss.get("security")
+            if sec == "reality":
+                rs = ss.get("realitySettings") or {}
+                ob["tls"] = {
+                    "enabled": True,
+                    "server_name": rs.get("serverName", ""),
+                    "utls": {"enabled": True,
+                             "fingerprint": rs.get("fingerprint", "chrome")},
+                    "reality": {"enabled": True,
+                                "public_key": rs.get("publicKey", ""),
+                                "short_id": rs.get("shortId", "")},
+                }
+            elif sec == "tls":
+                ts = ss.get("tlsSettings") or {}
+                ob["tls"] = {"enabled": True,
+                             "server_name": ts.get("serverName", node["address"])}
+
+            net = ss.get("network", "tcp")
+            if net == "ws":
+                wss = ss.get("wsSettings") or {}
+                ob["transport"] = {"type": "ws", "path": wss.get("path", "/")}
+            elif net == "grpc":
+                gs = ss.get("grpcSettings") or {}
+                ob["transport"] = {"type": "grpc",
+                                   "service_name": gs.get("serviceName", "")}
+            elif net not in ("tcp", "raw", ""):
+                continue
+            out.append(ob)
+    return out
+
+
+BARE_IP = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
 def usable(ob):
     if not ob:
         return False
@@ -252,6 +398,15 @@ def usable(ob):
     if host in DEAD_HOSTS or not host:
         return False
     if not isinstance(port, int) or port < 20 or port > 65535:
+        return False
+    # Отсев входных узлов внутри РФ. В этой подписке зарубежные выходы
+    # адресуются именами (nl.shadowq.cc, usa.shadowq.cc), а узлы «LTE обход»
+    # — голыми IP из российских диапазонов, причём в формате ссылок они
+    # названы BEST-2-* и по имени не отличаются.
+    # Признак провайдер-специфичный, но здесь разделяет группы однозначно,
+    # а цена ошибки высока: такой узел ближе всех по задержке, группа
+    # автовыбора предпочла бы именно его, и трафик «за рубеж» остался бы в РФ.
+    if BARE_IP.match(host):
         return False
     return True
 
@@ -289,7 +444,11 @@ def main():
             log(f"  {ua}: не ответил ({str(exc)[:40]})")
             continue
 
-        got = from_singbox_json(raw, used)
+        # Порядок важен: xray-конфиг тоже JSON, но со своей структурой,
+        # и sing-box-разборщик нашёл бы в нём ноль серверов.
+        got = from_xray_json(raw, used)
+        if got is None:
+            got = from_singbox_json(raw, used)
         if got is None:
             got = from_clash_yaml(raw, used)
         if got is None:
