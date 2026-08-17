@@ -185,9 +185,19 @@ h2 .pick:hover{{color:#e8eaed;border-color:#3a424d}}
      background:#23282f;color:#8b98a5;text-transform:uppercase;letter-spacing:.04em}}
 .src.vr{{background:#1c2c3a;color:#7dd3fc}}
 .desc{{color:#8b98a5;font-size:12.5px;margin-top:2px}}
-.cols{{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}}
-textarea{{width:100%;background:#171a1f;color:#e8eaed;border:1px solid #23282f;border-radius:10px;
-         padding:12px;font:12.5px/1.55 ui-monospace,Menlo,monospace;min-height:230px}}
+.tbl{{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));
+     margin-top:10px}}
+.trow{{display:flex;gap:8px;align-items:center;background:#171a1f;border:1px solid #23282f;
+      border-radius:9px;padding:6px 8px}}
+.trow.m-own{{border-color:#2f5f7a}}
+.trow.m-fast{{border-color:#7c4318}}
+.trow.m-off{{opacity:.5}}
+.trow input[type=text]{{flex:1;min-width:0;background:transparent;border:0;color:#e8eaed;
+     font:13px/1.4 ui-monospace,Menlo,monospace;padding:5px 4px}}
+.trow input[type=text]:focus{{outline:none;background:#1f242b;border-radius:6px}}
+.del{{color:#6b7681;cursor:pointer;padding:2px 7px;border-radius:6px;font-size:15px;flex:none}}
+.del:hover{{color:#f87171;background:#2a1215}}
+code{{background:#1f242b;padding:1px 5px;border-radius:4px;font-size:12px}}
 .msg{{padding:13px 16px;border-radius:10px;margin-bottom:16px;white-space:pre-wrap;
      font:12.5px/1.5 ui-monospace,Menlo,monospace}}
 .msg.ok{{background:#0f2a1a;border:1px solid #1f5133}}
@@ -214,20 +224,16 @@ textarea{{width:100%;background:#171a1f;color:#e8eaed;border:1px solid #23282f;b
   <button type="submit">Применить</button>
 </div></div>
 {groups}
-<h2>Свои списки</h2>
-<div class="cols">
-  <div>
-    <div class="hint">Домены, которых нет в готовых наборах.
-    Один на строку, поддомены покрываются автоматически.</div>
-    <textarea name="services">{services}</textarea>
-  </div>
-  <div>
-    <div class="hint">Подсети — только для протоколов без имени хоста.
-    Общие облачные диапазоны сюда класть нельзя: отсеивать попутчиков
-    после этого правила уже некому.</div>
-    <textarea name="networks">{networks}</textarea>
-  </div>
-</div>
+<h2>Свои домены<span class="pick" data-add="svc">+ строка</span></h2>
+<div class="hint">Чего нет в готовых наборах. Поддомены покрываются автоматически:
+<code>rezka.ag</code> покрывает и <code>hd.rezka.ag</code>.</div>
+<div class="tbl" id="t-svc">{services}</div>
+
+<h2>Свои подсети<span class="pick" data-add="net">+ строка</span></h2>
+<div class="hint">Только для протоколов <b>без имени хоста</b> — например Telegram
+MTProto. Общие облачные диапазоны сюда класть нельзя: отсеивать попутчиков
+после этого правила уже некому.</div>
+<div class="tbl" id="t-net">{networks}</div>
 <button type="submit">Применить</button>
 </form>
 </div>
@@ -250,15 +256,91 @@ document.getElementById('q').addEventListener('input',e=>{{
     h.classList.toggle('hide',!any); g.classList.toggle('hide',!any);
   }});
 }});
-document.querySelectorAll('.pick').forEach(p=>p.addEventListener('click',()=>{{
+document.querySelectorAll('.pick[data-g]').forEach(p=>p.addEventListener('click',()=>{{
   const g=document.querySelector('.grid[data-g="'+p.dataset.g+'"]');
   [...g.children].filter(c=>!c.classList.contains('hide')).forEach(c=>{{
     c.querySelector('input[value="'+p.dataset.m+'"]').checked=true; paint(c);
   }});
   recount();
 }}));
+
+// --- таблицы своих списков -------------------------------------------------
+// Значение и политика — два поля в строке: скрытое поле хранит выбор,
+// сегменты его переключают. Так оба списка приходят на сервер в одном
+// порядке и не разъезжаются.
+function rowMode(row,m){{
+  row.querySelector('input[type=hidden]').value=m;
+  row.className='trow m-'+m;
+}}
+function bindRow(row){{
+  row.querySelectorAll('.seg-btn').forEach(b=>
+    b.addEventListener('click',()=>rowMode(row,b.dataset.m)));
+  row.querySelector('.del').addEventListener('click',()=>{{
+    const t=row.parentElement; row.remove();
+    if(!t.children.length) addRow(t.id==='t-svc'?'svc':'net');
+  }});
+  // Печатаешь в последней строке — сразу появляется следующая пустая,
+  // чтобы не жать «плюс» на каждый домен.
+  const inp=row.querySelector('input[type=text]');
+  inp.addEventListener('input',()=>{{
+    const t=row.parentElement;
+    if(row===t.lastElementChild && inp.value.trim())
+      addRow(t.id==='t-svc'?'svc':'net');
+  }});
+}}
+function addRow(prefix,focus){{
+  const t=document.getElementById('t-'+prefix);
+  const src=t.lastElementChild||t.firstElementChild;
+  const row=src.cloneNode(true);
+  row.querySelector('input[type=text]').value='';
+  rowMode(row,'own');
+  t.appendChild(row); bindRow(row);
+  if(focus) row.querySelector('input[type=text]').focus();
+  return row;
+}}
+document.querySelectorAll('.trow').forEach(bindRow);
+document.querySelectorAll('.pick[data-add]').forEach(p=>
+  p.addEventListener('click',()=>addRow(p.dataset.add,true)));
 </script>
 """
+
+
+def read_rows(path):
+    """Файл своих списков -> [(значение, политика)] в исходном порядке.
+
+    Закомментированная строка вида «# rezka.ag fast» означает «мимо туннеля»,
+    но запись сохраняется: удалять её при выключении значило бы терять
+    то, что владелец однажды уже вписал.
+    """
+    rows = []
+    for line in open(path):
+        raw = line.strip()
+        if not raw:
+            continue
+        off = raw.startswith("#")
+        body = raw.lstrip("#").strip()
+        parts = body.split()
+        # Комментарии-пояснения от выключенных записей отличаем по форме:
+        # запись — это одно-два слова, где второе является политикой.
+        if not parts or len(parts) > 2:
+            continue
+        if len(parts) == 2 and parts[1] not in ("own", "fast"):
+            continue
+        if "." not in parts[0] and "/" not in parts[0]:
+            continue
+        rows.append((parts[0], "off" if off else (parts[1] if len(parts) > 1 else "own")))
+    return rows
+
+
+def write_rows(path, rows, header):
+    out = [header, ""]
+    for value, policy in rows:
+        if not value:
+            continue
+        # «Мимо» пишется комментарием, а не удалением: запись сохраняется
+        # и её видно в интерфейсе, чтобы можно было вернуть одним щелчком.
+        out.append(f"# {value} own" if policy == "off" else f"{value} {policy}")
+    open(path, "w").write("\n".join(out) + "\n")
 
 
 def read_policies():
@@ -362,6 +444,25 @@ def render(message=""):
             )
         out.append("</div>")
 
+    def table(path, prefix):
+        rows = read_rows(path)
+        rows.append(("", "own"))          # одна пустая строка, чтобы можно было сразу дописать
+        cells = []
+        for value, policy in rows:
+            seg = "".join(
+                f'<span class="s-{m} seg-btn" data-m="{m}">{lbl}</span>'
+                for m, lbl in MODES
+            )
+            cells.append(
+                f'<div class="trow m-{policy}">'
+                f'<input type="text" name="{prefix}-val" value="{html.escape(value)}"'
+                f' placeholder="{"домен" if prefix == "svc" else "подсеть, например 91.108.4.0/22"}">'
+                f'<input type="hidden" name="{prefix}-pol" value="{policy}">'
+                f'<span class="seg">{seg}</span>'
+                f'<span class="del" title="удалить строку">×</span></div>'
+            )
+        return "\n".join(cells)
+
     sb, tun, exit_ip = status()
     n_own = sum(1 for v in policies.values() if v == "own")
     n_fast = sum(1 for v in policies.values() if v == "fast")
@@ -369,8 +470,8 @@ def render(message=""):
         message=message,
         groups="\n".join(out),
         count=f"{n_own} свой · {n_fast} быстрый",
-        services=html.escape(open(SERVICES).read()),
-        networks=html.escape(open(NETWORKS).read()),
+        services=table(SERVICES, "svc"),
+        networks=table(NETWORKS, "net"),
         sb=sb, sb_class="ok" if sb == "active" else "bad",
         tun=tun, tun_class="ok" if tun == "работает" else "bad",
         exit_ip=html.escape(exit_ip),
@@ -420,7 +521,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._authorized():
             return
         length = int(self.headers.get("Content-Length", 0))
-        form = urllib.parse.parse_qs(self.rfile.read(length).decode())
+        # keep_blank_values обязателен: без него parse_qs выбрасывает пустые
+        # значения, и пустая строка таблицы теряет своё «значение», сохраняя
+        # «политику» — списки разъезжаются, и все записи после неё получают
+        # чужой режим. Поймано на том, что новый домен сохранился как own
+        # вместо fast.
+        form = urllib.parse.parse_qs(self.rfile.read(length).decode(),
+                                     keep_blank_values=True)
 
         policies = {}
         for key in (k for _, items in CATALOG for k, _ in items):
@@ -428,10 +535,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if mode in ("own", "fast"):
                 policies[key] = mode
         write_rulesets(policies)
-        for path, field in ((SERVICES, "services"), (NETWORKS, "networks")):
-            if field in form:
-                with open(path, "w") as fh:
-                    fh.write(form[field][0].replace("\r\n", "\n"))
+
+        # Значения и политики приходят двумя параллельными списками: браузер
+        # отправляет поля в порядке DOM, поэтому i-е значение соответствует
+        # i-й политике. Пары длиннее короткого списка отбрасываются — так
+        # рассинхронизация не может испортить файл.
+        for path, prefix, header in (
+            (SERVICES, "svc", "# Свои домены. Формат: «домен политика» (own|fast).\n"
+                              "# Закомментированная строка = мимо туннеля."),
+            (NETWORKS, "net", "# Свои подсети — для протоколов без имени хоста.\n"
+                              "# Формат: «подсеть политика» (own|fast)."),
+        ):
+            vals = form.get(f"{prefix}-val")
+            pols = form.get(f"{prefix}-pol")
+            if vals is None or pols is None:
+                continue
+            rows = [(v.strip(), p if p in ("own", "fast", "off") else "own")
+                    for v, p in zip(vals, pols) if v.strip()]
+            write_rows(path, rows, header)
 
         ok, text = apply_config()
         if ok:

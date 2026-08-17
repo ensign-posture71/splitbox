@@ -43,40 +43,52 @@ RULESET_UPDATE = "1d"
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
 
 
+def read_policy_list(path):
+    """Файл вида «значение [own|fast]» -> {'own': [...], 'fast': [...]}.
+
+    Политика на каждой строке, а не на файле целиком: у ручных записей она
+    так же разная, как у готовых наборов. Умолчание own — свой сервер
+    безопаснее чужого, поэтому попадание в общую группу должно быть
+    явным решением.
+    """
+    out = {"own": [], "fast": []}
+    with open(path) as fh:
+        for line in fh:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            parts = line.split()
+            policy = parts[1] if len(parts) > 1 else "own"
+            if policy not in out:
+                sys.exit(f"ОШИБКА: неизвестная политика '{policy}' в {path}")
+            out[policy].append(parts[0].lower())
+    return {k: sorted(set(v)) for k, v in out.items()}
+
+
 def load_services():
-    """Список сервисов -> два массива для правила маршрутизации sing-box.
+    """Свои домены -> массивы для правил маршрутизации sing-box.
 
     Точное совпадение и суффикс задаются раздельно намеренно: голый
     domain_suffix="openai.com" совпал бы и с "myopenai.com". Точка впереди
     делает совпадение по границе метки.
     """
-    domains = []
-    with open(SERVICES) as fh:
-        for line in fh:
-            line = line.split("#", 1)[0].strip().lower()
-            if line:
-                domains.append(line)
-    domains = sorted(set(domains))
-    return {
-        "SERVICES_EXACT": domains,
-        "SERVICES_SUFFIX": ["." + d for d in domains],
-    }
+    by = read_policy_list(SERVICES)
+    env = {}
+    for policy in ("own", "fast"):
+        env[f"SERVICES_EXACT_{policy.upper()}"] = by[policy]
+        env[f"SERVICES_SUFFIX_{policy.upper()}"] = ["." + d for d in by[policy]]
+    return env
 
 
 def load_networks():
-    """Подсети для протоколов без имени хоста (Telegram MTProto и подобные).
+    """Свои подсети — для протоколов без имени хоста (Telegram MTProto).
 
-    Отдельным правилом, а не полем в правиле доменов: в sing-box условия
+    Отдельными правилами, а не полем в правиле доменов: в sing-box условия
     внутри одного правила объединяются по И, поэтому domain и ip_cidr вместе
     требовали бы совпадения обоих сразу.
     """
-    nets = []
-    with open(NETWORKS) as fh:
-        for line in fh:
-            line = line.split("#", 1)[0].strip()
-            if line:
-                nets.append(line)
-    return {"SERVICES_CIDR": sorted(set(nets))}
+    by = read_policy_list(NETWORKS)
+    return {f"SERVICES_CIDR_{p.upper()}": by[p] for p in ("own", "fast")}
 
 
 def load_env(path):
@@ -179,11 +191,7 @@ def load_backup():
 
 def main():
     env = load_env(ENV)
-    services = load_services()
-    if not services["SERVICES_EXACT"]:
-        sys.exit(f"ОШИБКА: {SERVICES} пуст — конфиг без списка сервисов "
-                 "отправил бы весь трафик напрямую")
-    env.update(services)
+    env.update(load_services())
     env.update(load_networks())
 
     rule_sets, rule_tags = load_rulesets()

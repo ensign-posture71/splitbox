@@ -19,36 +19,36 @@
 # =============================================================================
 
 # --- ИИ-сервисы [ОН] ---------------------------------------------------------
-openai.com
-chatgpt.com
-oaistatic.com
-oaiusercontent.com
-anthropic.com
-claude.ai
-gemini.google.com
-aistudio.google.com
-generativelanguage.googleapis.com
-perplexity.ai
-githubcopilot.com
-copilot.microsoft.com
-x.ai
-huggingface.co
-cursor.com
+openai.com own
+chatgpt.com own
+oaistatic.com own
+oaiusercontent.com own
+anthropic.com own
+claude.ai own
+gemini.google.com own
+aistudio.google.com own
+generativelanguage.googleapis.com own
+perplexity.ai own
+githubcopilot.com own
+copilot.microsoft.com own
+x.ai own
+huggingface.co own
+cursor.com own
 
 # --- Соцсети и мессенджеры [РФ] ----------------------------------------------
-instagram.com
-cdninstagram.com
-facebook.com
-fbcdn.net
-threads.net
-twitter.com
-x.com
-twimg.com
-linkedin.com
-licdn.com
-discord.com
-discordapp.com
-discord.gg
+instagram.com own
+cdninstagram.com own
+facebook.com own
+fbcdn.net own
+threads.net own
+twitter.com own
+x.com own
+twimg.com own
+linkedin.com own
+licdn.com own
+discord.com own
+discordapp.com own
+discord.gg own
 
 # --- YouTube [РФ] ------------------------------------------------------------
 # Был временно отключён, пока держалась O28: через TPROXY не открывался вовсе.
@@ -60,21 +60,21 @@ discord.gg
 # добавить диапазоны Google в abroad с комментарием svc-net.
 # Цена этого решения выше, чем у Meta: через контейнер пойдёт заметно
 # больше трафика.
-youtube.com
-youtu.be
-ytimg.com
-googlevideo.com
-ggpht.com
-youtubei.googleapis.com
+youtube.com own
+youtu.be own
+ytimg.com own
+googlevideo.com own
+ggpht.com own
+youtubei.googleapis.com own
 
 # --- Медиа и подписки [ОН] ---------------------------------------------------
-spotify.com
-scdn.co
-netflix.com
-nflxvideo.net
-patreon.com
-medium.com
-substack.com
+spotify.com own
+scdn.co own
+netflix.com own
+nflxvideo.net own
+patreon.com own
+medium.com own
+substack.com own
 
 # --- Домашние устройства [ОН] ------------------------------------------------
 # Облака IoT-производителей, ограничивающие РФ. Трафика мало, зато эти
@@ -84,60 +84,60 @@ substack.com
 # Bosch Home Connect. ВНИМАНИЕ: настоящий домен пишется ЧЕРЕЗ ДЕФИС —
 # home-connect.com. В первой редакции было homeconnect.com без дефиса,
 # и посудомойка из-за этого не работала: правило просто не совпадало.
-home-connect.com
-homeconnect.com
-homeconnectegw.com
-homeconnecthca.com
-bsh-group.com
+home-connect.com own
+homeconnect.com own
+homeconnectegw.com own
+homeconnecthca.com own
+bsh-group.com own
 
 # Ubiquiti / UniFi — включая загрузку прошивок
-ui.com
-ubnt.com
-svc.ui.com
+ui.com own
+ubnt.com own
+svc.ui.com own
 
 # --- Рабочие инструменты [ОН] ------------------------------------------------
-notion.so
-notion.site
-figma.com
-canva.com
+notion.so own
+notion.site own
+figma.com own
+canva.com own
 
 # --- Мессенджеры [РФ] --------------------------------------------------------
-whatsapp.com
-whatsapp.net
-telegram.org
-telegram.me
-t.me
-telesco.pe
-tdesktop.com
+whatsapp.com own
+whatsapp.net own
+telegram.org own
+telegram.me own
+t.me own
+telesco.pe own
+tdesktop.com own
 
 # --- Аниме и медиа [РФ] ------------------------------------------------------
-anilibria.tv
-anilibria.top
-anilib.me
-animego.org
-animego.me
-myanimelist.net
-cdn.myanimelist.net
-lostfilm.tv
-lostfilm.download
-rezka.ag
-hdrezka.ag
-nnmclub.to
+anilibria.tv fast
+anilibria.top fast
+anilib.me fast
+animego.org fast
+animego.me fast
+myanimelist.net fast
+cdn.myanimelist.net fast
+lostfilm.tv fast
+lostfilm.download fast
+rezka.ag fast
+hdrezka.ag fast
+nnmclub.to fast
 
 # --- Прочее со скриншота -----------------------------------------------------
-grok.com
-manus.im
-notepad-plus-plus.org
-pornhub.com
-phncdn.com
+grok.com own
+manus.im own
+notepad-plus-plus.org own
+pornhub.com fast
+phncdn.com fast
 
 # --- FaceTime [ОН] -----------------------------------------------------------
 # Точечно, БЕЗ blanket apple.com (решение владельца остаётся в силе):
 # заворачиваются только домены, через которые идут установление звонка
 # и пуш-уведомления, а не App Store с iCloud.
-facetime.apple.com
-init.ess.apple.com
-courier.push.apple.com
+facetime.apple.com own
+init.ess.apple.com own
+courier.push.apple.com own
 
 # --- Кандидаты, требующие решения владельца ----------------------------------
 # Раскомментировать осознанно — у каждого своя цена.
