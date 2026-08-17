@@ -1,0 +1,8 @@
+# Секреты — никогда в Git
+secrets/
+*.key
+*.privkey
+*_private*
+# Сырые экспорты могут содержать ключи/пароли — кладём только очищенные
+baseline/*.rsc
+!baseline/.gitkeep
