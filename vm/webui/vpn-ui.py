@@ -169,8 +169,9 @@ h2 .pick:hover{{color:#e8eaed;border-color:#3a424d}}
       display:flex;flex-direction:column;gap:7px}}
 .card.m-own{{border-color:#2f5f7a;background:#151b20}}
 .card.m-fast{{border-color:#7c4318;background:#1d1a17}}
-.seg{{display:flex;gap:0;margin-top:auto;border:1px solid #2b313a;border-radius:8px;
-     overflow:hidden;align-self:flex-start}}
+.seg{{display:flex;gap:0;border:1px solid #2b313a;border-radius:8px;
+     overflow:hidden;align-self:flex-start;flex:none}}
+.card .seg{{margin-top:auto}}
 .sw{{cursor:pointer}}
 .sw input{{position:absolute;opacity:0;pointer-events:none}}
 .sw span{{display:block;padding:5px 13px;font-size:12.5px;color:#8b98a5;
@@ -185,7 +186,22 @@ h2 .pick:hover{{color:#e8eaed;border-color:#3a424d}}
      background:#23282f;color:#8b98a5;text-transform:uppercase;letter-spacing:.04em}}
 .src.vr{{background:#1c2c3a;color:#7dd3fc}}
 .desc{{color:#8b98a5;font-size:12.5px;margin-top:2px}}
-.tbl{{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));
+/* Переключатель в строке таблицы. Разметка тут на span-ах, а не на label
+   с радиокнопками как в карточках, поэтому нужны отдельные правила —
+   без них сегменты слипались в сплошной текст «мимосвойбыстрый»
+   и выбранный ничем не отличался от остальных. */
+.seg-btn{{display:block;padding:5px 11px;font-size:12px;color:#8b98a5;
+         border-right:1px solid #2b313a;cursor:pointer;user-select:none;
+         white-space:nowrap}}
+.seg-btn:last-child{{border-right:0}}
+.seg-btn:hover{{background:#1f242b;color:#cbd5e1}}
+.trow.m-own  .seg-btn.s-own {{background:#1d4d68;color:#e0f2fe}}
+.trow.m-fast .seg-btn.s-fast{{background:#9a4a12;color:#fff5eb}}
+.trow.m-off  .seg-btn.s-off {{background:#2b313a;color:#e8eaed}}
+
+/* 520px, а не 430: длинные домены вроде generativelanguage.googleapis.com
+   не должны обрезаться — иначе непонятно, что именно в строке. */
+.tbl{{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));
      margin-top:10px}}
 .trow{{display:flex;gap:8px;align-items:center;background:#171a1f;border:1px solid #23282f;
       border-radius:9px;padding:6px 8px}}
