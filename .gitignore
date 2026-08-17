@@ -3,6 +3,7 @@ secrets/
 *.key
 *.privkey
 *_private*
-# Сырые экспорты могут содержать ключи/пароли — кладём только очищенные
+# Сырые экспорты содержат ключи/токены — в Git идут только санитизированные
 baseline/*.rsc
+!baseline/*.sanitized.rsc
 !baseline/.gitkeep
