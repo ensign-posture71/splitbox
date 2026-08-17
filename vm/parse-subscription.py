@@ -160,6 +160,25 @@ def parse_ss(url, used):
 
 PARSERS = {"vless": parse_vless, "trojan": parse_trojan, "ss": parse_ss}
 
+# Адреса, которые никуда не ведут. Провайдеры кладут такие записи вместо
+# серверов, когда подписка неактивна: у shadowq.cc это был
+# vless://...@0.0.0.0:1 с тегом «Напиши в поддержку».
+# Без этой проверки заглушка попадает в группу автовыбора, и sing-box
+# бесконечно долбится в несуществующий адрес, замедляя выбор живого.
+DEAD_HOSTS = {"0.0.0.0", "127.0.0.1", "::", "::1", "localhost", "example.com"}
+
+
+def usable(ob):
+    if not ob:
+        return False
+    host = str(ob.get("server", "")).strip().lower()
+    port = ob.get("server_port", 0)
+    if host in DEAD_HOSTS or not host:
+        return False
+    if not isinstance(port, int) or port < 20 or port > 65535:
+        return False
+    return True
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
@@ -200,12 +219,18 @@ def main():
             ob = parser(line, used)
         except Exception:
             ob = None
-        if ob:
+        if usable(ob):
             outbounds.append(ob)
         else:
             skipped += 1
+            if ob:
+                log(f"  отброшен нерабочий адрес: {ob.get('server')}:{ob.get('server_port')}"
+                    f" ({ob.get('tag')})")
 
-    log(f"серверов разобрано: {len(outbounds)}, пропущено: {skipped}")
+    log(f"серверов пригодных: {len(outbounds)}, отброшено: {skipped}")
+    if not outbounds and skipped:
+        log("ВНИМАНИЕ: в подписке нет ни одного рабочего сервера. "
+            "Обычно это значит, что она неактивна — проверьте у провайдера.")
     by_type = {}
     for ob in outbounds:
         by_type[ob["type"]] = by_type.get(ob["type"], 0) + 1
