@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""Синхронизация curated-списка сервисов с address-list `abroad` на MikroTik.
+"""Синхронизация списка сервисов с DNS-статикой MikroTik (схема D19).
 
-Схема D16, ступень 1. Домены из sync/abroad-services.list кладутся на роутер
-FQDN-записями: RouterOS резолвит их сам и поддерживает дочерние динамические
-записи с актуальными адресами (проверено, O19).
+Для каждого домена из sync/abroad-services.list создаётся запись:
 
-Почему именно так, а не резолвинг на нашей стороне с заливкой IP:
-клиентские устройства массово ходят по DoH/DoT мимо локального DNS (O27),
-поэтому наблюдать за их резолвингом бесполезно. А FQDN-запись резолвит сам
-роутер, и от поведения клиентов это не зависит вовсе.
+    /ip dns static add name=<домен> type=FWD match-subdomain=yes \\
+        address-list=abroad forward-to=192.168.88.45
 
-Скрипт идемпотентен и трогает только свои записи — те, что помечены
-комментарием TAG. Ручные записи владельца остаются нетронутыми.
+Механика: роутер и так DNS для всей сети (DHCP отдаёт 192.168.88.1).
+Резолвя такой домен, он кладёт в address-list `abroad` **ровно те адреса,
+которые в этот же момент отдал клиенту**. Расхождение между «что знает
+роутер» и «куда пошёл клиент» становится невозможным.
+
+Чем это лучше двух предыдущих подходов:
+  * FQDN-записи в address-list — роутер резолвил домен сам, отдельно от
+    клиента, и у сервисов с ротацией адресов (Meta, Google) списки
+    расходились: клиент шёл на адрес, которого в списке нет (O31);
+  * широкие диапазоны провайдеров — покрывают проценты всего IPv4,
+    а помеченный трафик не проходит fasttrack, и роутер на 448 МГц
+    обрабатывал бы медленным путём большую часть домашнего трафика.
+
+Ограничение (важное): работает только для клиентов, которые резолвят
+через роутер. Устройства с DoH/DoT ходят мимо (O27) — для них стеринг
+не сработает. Отсюда практический смысл блокировки DoH/DoT (§7.8).
+
+Скрипт идемпотентен и трогает только свои записи (comment=svc).
 
   --dry-run   показать план, ничего не менять
 """
@@ -29,10 +41,8 @@ ROUTER_USER = "sync"
 SSH_KEY = os.path.expanduser("~/.ssh/id_sync")
 LIST = "abroad"
 TAG = "svc"
-
-# Записей на одну SSH-команду. Список короткий (десятки), но пачками
-# всё равно быстрее и меньше рукопожатий.
-BATCH = 40
+UPSTREAM = "192.168.88.45"   # AdGuard: цепочка резолвинга сети не меняется (D6)
+BATCH = 25
 
 
 def log(msg):
@@ -43,10 +53,9 @@ def read_services():
     domains = []
     with open(SERVICES) as fh:
         for line in fh:
-            line = line.split("#", 1)[0].strip()
+            line = line.split("#", 1)[0].strip().lower()
             if line:
-                domains.append(line.lower())
-    # Порядок не важен, но дубликаты создали бы лишние записи на роутере.
+                domains.append(line)
     return sorted(set(domains))
 
 
@@ -65,15 +74,9 @@ def router(commands):
 
 
 def existing():
-    """Статические записи, добавленные этим скриптом.
-
-    dynamic=no отсеивает дочерние записи с резолвленными адресами —
-    ими управляет сам RouterOS, трогать их нельзя.
-    """
     out = router([
-        f':foreach e in=[/ip firewall address-list find where list={LIST} && dynamic=no] do={{'
-        f':local c [/ip firewall address-list get $e comment];'
-        f':if ($c="{TAG}") do={{:put [/ip firewall address-list get $e address]}}}}'
+        f':foreach e in=[/ip dns static find where comment="{TAG}"] do='
+        f'{{:put [/ip dns static get $e name]}}'
     ])
     return {l.strip().lower() for l in out.splitlines() if l.strip()}
 
@@ -103,21 +106,27 @@ def main():
         return
 
     for i in range(0, len(to_del), BATCH):
-        router([
-            f'/ip firewall address-list remove '
-            f'[find where list={LIST} && address="{d}" && comment="{TAG}"]'
-            for d in to_del[i:i + BATCH]
-        ])
+        router([f'/ip dns static remove [find where comment="{TAG}" && name="{d}"]'
+                for d in to_del[i:i + BATCH]])
+
     for i in range(0, len(to_add), BATCH):
         router([
-            f'/ip firewall address-list add list={LIST} address={d} comment={TAG}'
+            f'/ip dns static add name={d} type=FWD match-subdomain=yes '
+            f'address-list={LIST} forward-to={UPSTREAM} comment={TAG}'
             for d in to_add[i:i + BATCH]
         ])
 
-    total = router([
-        f':put [:len [/ip firewall address-list find where list={LIST}]]'
-    ]).strip()
-    log(f"готово. записей в списке {LIST} всего (с дочерними динамическими): {total}")
+    if to_add or to_del:
+        # Кэш держит старые ответы, а вместе с ними — старые адреса.
+        # Без сброса новые записи начнут наполнять список только по истечении TTL.
+        router(["/ip dns cache flush"])
+        log("кэш DNS сброшен")
+
+    stats = router([
+        f':put [:len [/ip dns static find where comment="{TAG}"]]',
+        f':put [:len [/ip firewall address-list find where list={LIST}]]',
+    ]).split()
+    log(f"готово. DNS-записей: {stats[0]}, адресов в {LIST}: {stats[1]}")
 
 
 if __name__ == "__main__":
