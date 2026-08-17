@@ -1,0 +1,26 @@
+[Unit]
+# Политика маршрутизации для TPROXY: помеченные меткой 1 пакеты ядро должно
+# считать локальными, иначе tproxy-сокет их не получит.
+# Поднимается ДО sing-box и живёт, пока он работает.
+Description=Policy routing for sing-box TPROXY
+# network.target, а НЕ network-online.target: в LXC со статическим адресом
+# wait-online-юнита нет, цель не наступает, и служба вечно висит в очереди.
+After=network.target
+Before=sing-box.service
+PartOf=sing-box.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Идемпотентно: сначала снимаем возможные остатки прошлого запуска, потом ставим.
+ExecStart=/bin/sh -c 'ip rule del fwmark 1 lookup 100 2>/dev/null; ip rule add fwmark 1 lookup 100'
+ExecStart=/bin/sh -c 'ip route replace local 0.0.0.0/0 dev lo table 100'
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/singbox.nft
+
+ExecStop=/bin/sh -c 'nft delete table ip sing-box 2>/dev/null || true'
+ExecStop=/bin/sh -c 'ip rule del fwmark 1 lookup 100 2>/dev/null || true'
+ExecStop=/bin/sh -c 'ip route flush table 100 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
