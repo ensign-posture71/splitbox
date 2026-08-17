@@ -3,7 +3,11 @@
 Три пути трафика для всех устройств дома, без настройки на самих устройствах:
 **работа** (WireGuard) · **напрямую** (по умолчанию, RU) · **за рубеж** (VLESS+Reality через VM).
 
-Архитектура — [`docs/architecture.md`](docs/architecture.md). Решения и находки — [`docs/decisions.md`](docs/decisions.md).
+**Входишь в проект? Начни с [`docs/HANDOFF.md`](docs/HANDOFF.md)** — состояние,
+доступы, как менять и на какие грабли уже наступили.
+
+Исходная архитектура — [`docs/architecture.md`](docs/architecture.md).
+Журнал решений и находок — [`docs/decisions.md`](docs/decisions.md).
 
 ## Структура
 

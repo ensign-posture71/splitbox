@@ -7,3 +7,8 @@ secrets/
 baseline/*.rsc
 !baseline/*.sanitized.rsc
 !baseline/.gitkeep
+
+# Мусор macOS и Python
+.DS_Store
+__pycache__/
+*.pyc
