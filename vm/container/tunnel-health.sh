@@ -56,6 +56,17 @@ unblock_icmp() {
     fi
 }
 
+# --- Проверка боевого пути, а не только туннеля ------------------------------
+# Запрос ниже идёт через локальный socks-вход и tproxy НЕ задействует.
+# Однажды это уже вышло боком: обвязка tproxy была снята, трафик кружил
+# в петле маршрутизации, а health-check показывал зелёный свет.
+# Поэтому сначала — наличие самой обвязки, и она чинится, а не гасится:
+# отсутствие правил лечится перезапуском службы, а не уходом в fail-open.
+if ! nft list table ip sing-box >/dev/null 2>&1 || ! ip rule show | grep -q "fwmark 0x1 lookup 100"; then
+    log "ОБВЯЗКА TPROXY ОТСУТСТВУЕТ — восстанавливаю singbox-tproxy.service"
+    systemctl restart singbox-tproxy.service
+fi
+
 fails=0
 [ -r "$STATE" ] && fails=$(cat "$STATE" 2>/dev/null || echo 0)
 

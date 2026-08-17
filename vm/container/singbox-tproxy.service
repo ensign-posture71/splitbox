@@ -7,7 +7,17 @@ Description=Policy routing for sing-box TPROXY
 # wait-online-юнита нет, цель не наступает, и служба вечно висит в очереди.
 After=network.target
 Before=sing-box.service
-PartOf=sing-box.service
+
+# PartOf=sing-box.service здесь БЫЛО и это была ошибка, стоившая обрыва
+# передачи данных. PartOf пробрасывает остановку, но НЕ запуск: остановка
+# sing-box снимала nft-правило tproxy и ip rule, а обратный запуск их
+# не возвращал. Роутер продолжал слать трафик на контейнер, контейнер
+# отправлял его обратно по своему default-маршруту — получалась петля
+# маршрутизации (в захвате: один и тот же SYN, 693 пакета за секунды).
+#
+# Зависимость должна идти в обратную сторону: это sing-box требует
+# обвязку, а не обвязка следует за sing-box. Задано drop-in'ом
+# sing-box.service.d/require-tproxy.conf.
 
 [Service]
 Type=oneshot
