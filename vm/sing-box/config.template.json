@@ -7,6 +7,24 @@
     "timestamp": true
   },
 
+  "dns": {
+    "//": "Собственный резолвер ТОЛЬКО для адреса VPS. Причина — наблюдённый отказ: AdGuard через upstream xbox-dns.ru (O20) переставал отдавать A-запись для fear.freemyip.com, и каждое соединение вставало на 10 с таймаута. Держать путь «за рубеж» на зависимости от стороннего DoH нельзя.",
+    "servers": [
+      {
+        "type": "udp",
+        "tag": "dns-endpoint",
+        "server": "8.8.8.8"
+      },
+      {
+        "type": "udp",
+        "tag": "dns-endpoint-backup",
+        "server": "9.9.9.9"
+      }
+    ],
+    "strategy": "ipv4_only",
+    "//strategy": "ipv4_only — у контейнера есть ULA-адрес IPv6 (RA в LAN), а наружу IPv6 не маршрутизируется. Без этого резолвер уводит соединения в нерабочий AAAA."
+  },
+
   "inbounds": [
     {
       "type": "tproxy",
@@ -22,9 +40,10 @@
       "type": "vless",
       "tag": "reality-out",
       "server": "${SERVER}",
-      "server_port": ${SERVER_PORT},
+      "server_port": "${SERVER_PORT}",
       "uuid": "${UUID}",
       "packet_encoding": "xudp",
+      "domain_resolver": "dns-endpoint",
       "tls": {
         "enabled": true,
         "server_name": "${SNI_DEST}",
@@ -59,6 +78,8 @@
     ],
     "final": "reality-out",
     "auto_detect_interface": true,
+    "default_domain_resolver": "dns-endpoint",
+    "//default_domain_resolver": "Обязателен начиная с sing-box 1.12: без него проверка падает с deprecation-фаталом. Задаёт резолвер по умолчанию для всех исходящих соединений.",
     "//": "final=reality-out, потому что роутер присылает сюда только abroad-трафик. Классификация уже сделана на роутере."
   }
 }
