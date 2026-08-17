@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = os.path.join(ROOT, "secrets", "reality-vps.env")
 TPL = os.path.join(ROOT, "vm", "sing-box", "config.template.json")
 SERVICES = os.path.join(ROOT, "sync", "abroad-services.list")
+NETWORKS = os.path.join(ROOT, "sync", "abroad-networks.list")
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
 
@@ -42,6 +43,22 @@ def load_services():
         "SERVICES_EXACT": domains,
         "SERVICES_SUFFIX": ["." + d for d in domains],
     }
+
+
+def load_networks():
+    """Подсети для протоколов без имени хоста (Telegram MTProto и подобные).
+
+    Отдельным правилом, а не полем в правиле доменов: в sing-box условия
+    внутри одного правила объединяются по И, поэтому domain и ip_cidr вместе
+    требовали бы совпадения обоих сразу.
+    """
+    nets = []
+    with open(NETWORKS) as fh:
+        for line in fh:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                nets.append(line)
+    return {"SERVICES_CIDR": sorted(set(nets))}
 
 
 def load_env(path):
@@ -92,6 +109,7 @@ def main():
         sys.exit(f"ОШИБКА: {SERVICES} пуст — конфиг без списка сервисов "
                  "отправил бы весь трафик напрямую")
     env.update(services)
+    env.update(load_networks())
 
     with open(TPL) as fh:
         template = json.load(fh)
