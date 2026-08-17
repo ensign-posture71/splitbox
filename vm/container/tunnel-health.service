@@ -1,0 +1,8 @@
+[Unit]
+Description=Health-check туннеля (слой 2 fail-back)
+After=sing-box.service
+Documentation=file:///opt/abroad-sync/README.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tunnel-health.sh

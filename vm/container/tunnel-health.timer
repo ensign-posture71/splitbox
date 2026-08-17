@@ -1,0 +1,12 @@
+[Unit]
+Description=Проверять туннель раз в минуту
+
+[Timer]
+# Минута — компромисс: реакция на отказ достаточно быстрая, а нагрузки
+# на VPS от одного запроса в минуту нет.
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
