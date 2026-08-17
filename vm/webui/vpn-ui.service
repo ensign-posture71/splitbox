@@ -1,0 +1,17 @@
+[Unit]
+Description=Веб-интерфейс к спискам маршрутизации sing-box
+After=network.target
+Documentation=file:///opt/vpn-config/sync/README.md
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/vpn-config/vm/webui/vpn-ui.py
+Restart=on-failure
+RestartSec=5
+
+# Интерфейс перезапускает sing-box и правит /etc/sing-box/config.json,
+# поэтому работает от root. Слушает только LAN-адрес контейнера,
+# наружу не смотрит.
+
+[Install]
+WantedBy=multi-user.target

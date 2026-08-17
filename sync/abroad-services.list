@@ -81,11 +81,19 @@ substack.com
 # устройства резолвят через AdGuard (видны в query-логе) — значит адреса,
 # которые получит роутер, совпадут с теми, что получат сами железки.
 # Для них IP-стеринг работает точно, в отличие от CDN-сервисов.
+# Bosch Home Connect. ВНИМАНИЕ: настоящий домен пишется ЧЕРЕЗ ДЕФИС —
+# home-connect.com. В первой редакции было homeconnect.com без дефиса,
+# и посудомойка из-за этого не работала: правило просто не совпадало.
+home-connect.com
 homeconnect.com
 homeconnectegw.com
 homeconnecthca.com
+bsh-group.com
+
+# Ubiquiti / UniFi — включая загрузку прошивок
 ui.com
 ubnt.com
+svc.ui.com
 
 # --- Рабочие инструменты [ОН] ------------------------------------------------
 notion.so
