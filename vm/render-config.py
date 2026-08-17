@@ -21,6 +21,12 @@ ENV = os.path.join(ROOT, "secrets", "reality-vps.env")
 TPL = os.path.join(ROOT, "vm", "sing-box", "config.template.json")
 SERVICES = os.path.join(ROOT, "sync", "abroad-services.list")
 NETWORKS = os.path.join(ROOT, "sync", "abroad-networks.list")
+RULESETS = os.path.join(ROOT, "sync", "rulesets.list")
+
+# Готовые списки блокировок. Содержат и домены, и подсети, обновляются
+# автором автоматически. sing-box скачивает их сам по update_interval.
+RULESET_URL = "https://raw.githubusercontent.com/vernette/rulesets/master/srs/{}.srs"
+RULESET_UPDATE = "1d"
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
 
@@ -102,6 +108,33 @@ def render(node, env):
     return node, True
 
 
+def load_rulesets():
+    """Включённые готовые списки -> объекты rule_set и список их тегов.
+
+    Файл rulesets.list работает как набор галочек: строка раскомментирована —
+    список включён. Ничего, кроме этого файла, править не нужно.
+    """
+    tags = []
+    with open(RULESETS) as fh:
+        for line in fh:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                tags.append(line)
+    tags = sorted(set(tags))
+    sets = [
+        {
+            "type": "remote",
+            "tag": t,
+            "format": "binary",
+            "url": RULESET_URL.format(t),
+            "download_detour": "direct",
+            "update_interval": RULESET_UPDATE,
+        }
+        for t in tags
+    ]
+    return sets, tags
+
+
 def main():
     env = load_env(ENV)
     services = load_services()
@@ -111,10 +144,23 @@ def main():
     env.update(services)
     env.update(load_networks())
 
+    rule_sets, rule_tags = load_rulesets()
+    env["RULESET_TAGS"] = rule_tags
+
     with open(TPL) as fh:
         template = json.load(fh)
 
     cfg, _ = render(template, env)
+
+    # rule_set добавляется после подстановки: это не плейсхолдер, а целый
+    # массив объектов, который проще собрать здесь, чем описывать в шаблоне.
+    if rule_sets:
+        cfg["route"]["rule_set"] = rule_sets
+    else:
+        cfg["route"].pop("rule_set", None)
+        cfg["route"]["rules"] = [
+            r for r in cfg["route"]["rules"] if "rule_set" not in r
+        ]
 
     leftover = PLACEHOLDER.findall(json.dumps(cfg))
     if leftover:
