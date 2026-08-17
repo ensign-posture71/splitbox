@@ -1,0 +1,64 @@
+{
+  "//": "ШАБЛОН. Плейсхолдеры ${...} подставляются из secrets/reality-vps.env при развёртывании.",
+  "//flow": "ВАЖНО: поле flow отсутствует намеренно. В выделенном ключе Reality-443-mikrotik параметра flow нет (D10, ревизия от 2026-08-17). Добавлять xtls-rprx-vision НЕЛЬЗЯ — сервер для этого UUID его не ждёт.",
+
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+
+  "inbounds": [
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "0.0.0.0",
+      "listen_port": 7895,
+      "//": "Роутер маршрутизирует сюда пакеты с чужим dst (Вариант A, D1). Перехват — через nftables tproxy + ip rule."
+    }
+  ],
+
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "reality-out",
+      "server": "${SERVER}",
+      "server_port": ${SERVER_PORT},
+      "uuid": "${UUID}",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "${SNI_DEST}",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "${FINGERPRINT}"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "${REALITY_PUBLIC_KEY}",
+          "short_id": "${REALITY_SHORT_ID}"
+        }
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+
+  "route": {
+    "rules": [
+      {
+        "action": "sniff",
+        "//": "Достаём SNI/домен — нужно для правила возврата RU в direct (§4.2)."
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct",
+        "//": "Предохранитель: внутрисетевое никогда не уходит в туннель."
+      }
+    ],
+    "final": "reality-out",
+    "auto_detect_interface": true,
+    "//": "final=reality-out, потому что роутер присылает сюда только abroad-трафик. Классификация уже сделана на роутере."
+  }
+}
