@@ -1,0 +1,15 @@
+[Unit]
+Description=Обновление резервных серверов из подписки
+After=network.target
+
+[Service]
+Type=oneshot
+# Порядок: сначала перечитать подписку, потом пересобрать конфиг во временный
+# файл, проверить его и только потом заменить боевой. Если подписка отдала
+# мусор или недоступна — sing-box check это поймает, и старый рабочий конфиг
+# останется на месте. Резерв не должен ломать основной путь.
+ExecStart=/opt/vpn-config/vm/parse-subscription.py
+ExecStart=/bin/sh -c '/opt/vpn-config/vm/render-config.py > /etc/sing-box/config.json.new'
+ExecStart=/usr/bin/sing-box check -c /etc/sing-box/config.json.new
+ExecStart=/bin/mv /etc/sing-box/config.json.new /etc/sing-box/config.json
+ExecStart=/bin/systemctl restart sing-box

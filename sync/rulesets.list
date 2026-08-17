@@ -19,89 +19,89 @@
 # Широкий набор: сервисы, которые сами блокируют российские адреса.
 # Именно он закрывает «а почему вот этот сайт не открылся» — и именно он
 # нужен для облаков IoT вроде Bosch Home Connect и Ubiquiti.
-vernette:unavailable-in-russia
+vernette:unavailable-in-russia own
 
-# vernette:rkn
+# vernette:rkn own
 #   Реестр заблокированного в РФ. Огромный, с мусором (мошеннические сайты,
 #   спам). Для дома скорее вреден: нагрузка ради ненужного.
 
 # --- Мессенджеры (vernette — с подсетями) ------------------------------------
-vernette:telegram
-vernette:whatsapp
-vernette:discord-full
-# vernette:telegram-voice-chats
-# vernette:discord-voice-chats
+vernette:telegram own
+vernette:whatsapp own
+vernette:discord-full own
+# vernette:telegram-voice-chats own
+# vernette:discord-voice-chats own
 
 # --- Соцсети -----------------------------------------------------------------
-vernette:instagram
-vernette:x
-vernette:linkedin
-vernette:tiktok
-metacubex:facebook
-metacubex:reddit
+vernette:instagram own
+vernette:x own
+vernette:linkedin own
+vernette:tiktok own
+metacubex:facebook own
+metacubex:reddit own
 
 # --- Нейросети ---------------------------------------------------------------
-vernette:openai
-vernette:claude
-vernette:gemini
-vernette:grok
-vernette:copilot
-metacubex:anthropic
+vernette:openai own
+vernette:claude own
+vernette:gemini own
+vernette:grok own
+vernette:copilot own
+metacubex:anthropic own
 
 # --- Видео и музыка ----------------------------------------------------------
-vernette:youtube
-vernette:netflix
-vernette:spotify
-metacubex:twitch
-metacubex:soundcloud
-# metacubex:disney
-# metacubex:hbo
-# metacubex:primevideo
-# metacubex:bbc
-# metacubex:imdb
+vernette:youtube fast
+vernette:netflix fast
+vernette:spotify fast
+metacubex:twitch fast
+metacubex:soundcloud fast
+# metacubex:disney fast
+# metacubex:hbo fast
+# metacubex:primevideo fast
+# metacubex:bbc fast
+# metacubex:imdb fast
 
 # --- Работа и разработка -----------------------------------------------------
-metacubex:notion
-metacubex:figma
-metacubex:canva
-metacubex:github
-metacubex:jetbrains
-metacubex:docker
-# metacubex:atlassian
-# metacubex:slack
-# metacubex:zoom
-# metacubex:dropbox
-# metacubex:vercel
-# metacubex:netlify
-# metacubex:heroku
-# metacubex:digitalocean
+metacubex:notion own
+metacubex:figma own
+metacubex:canva own
+metacubex:github own
+metacubex:jetbrains own
+metacubex:docker fast
+# metacubex:atlassian own
+# metacubex:slack own
+# metacubex:zoom own
+# metacubex:dropbox own
+# metacubex:vercel own
+# metacubex:netlify own
+# metacubex:heroku own
+# metacubex:digitalocean own
 
 # --- Платежи и покупки -------------------------------------------------------
-metacubex:paypal
-# metacubex:ebay
-# metacubex:booking
-# metacubex:airbnb
-# metacubex:amazon
+metacubex:paypal own
+# metacubex:ebay own
+# metacubex:booking own
+# metacubex:airbnb own
+# metacubex:amazon own
 
 # --- Игры --------------------------------------------------------------------
-# metacubex:steam
-# metacubex:epicgames
-# metacubex:playstation
-# metacubex:xbox
-# metacubex:nintendo
+# metacubex:steam fast
+# metacubex:epicgames fast
+# metacubex:playstation fast
+# metacubex:xbox fast
+# metacubex:nintendo fast
 
 # --- Обучение ----------------------------------------------------------------
-# metacubex:coursera
-# metacubex:udemy
-# metacubex:duolingo
+# metacubex:coursera fast
+# metacubex:udemy fast
+# metacubex:duolingo fast
 
 # --- Прочее ------------------------------------------------------------------
-metacubex:medium
-metacubex:patreon
-metacubex:pornhub
-# metacubex:adobe
-# metacubex:apple-music
-# metacubex:apple-tvplus
-# metacubex:apple-update
-# metacubex:microsoft
-# metacubex:cloudflare
+metacubex:medium own
+metacubex:patreon own
+metacubex:pornhub fast
+# metacubex:adobe own
+# metacubex:apple-music own
+# metacubex:apple-tvplus own
+# metacubex:apple-update own
+# metacubex:microsoft own
+# metacubex:cloudflare own

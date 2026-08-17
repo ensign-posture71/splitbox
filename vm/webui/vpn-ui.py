@@ -164,12 +164,22 @@ h2{{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:#8b98a5;
 h2 .pick{{font-size:11px;text-transform:none;letter-spacing:0;color:#6b7681;cursor:pointer;
         border:1px solid #2b313a;border-radius:6px;padding:2px 9px;font-weight:500}}
 h2 .pick:hover{{color:#e8eaed;border-color:#3a424d}}
-.grid{{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}}
-label{{display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:10px;
-      cursor:pointer;background:#171a1f;border:1px solid #23282f}}
-label:hover{{border-color:#39414c}}
-label.on{{border-color:#7c4318;background:#1d1a17}}
-input[type=checkbox]{{margin-top:2px;width:17px;height:17px;accent-color:#f97316;flex:none}}
+.grid{{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}}
+.card{{padding:11px 13px;border-radius:10px;background:#171a1f;border:1px solid #23282f;
+      display:flex;flex-direction:column;gap:7px}}
+.card.m-own{{border-color:#2f5f7a;background:#151b20}}
+.card.m-fast{{border-color:#7c4318;background:#1d1a17}}
+.seg{{display:flex;gap:0;margin-top:auto;border:1px solid #2b313a;border-radius:8px;
+     overflow:hidden;align-self:flex-start}}
+.sw{{cursor:pointer}}
+.sw input{{position:absolute;opacity:0;pointer-events:none}}
+.sw span{{display:block;padding:5px 13px;font-size:12.5px;color:#8b98a5;
+         border-right:1px solid #2b313a;user-select:none}}
+.sw:last-child span{{border-right:0}}
+.sw:hover span{{background:#1f242b;color:#cbd5e1}}
+.sw input:checked + .s-own{{background:#1d4d68;color:#e0f2fe}}
+.sw input:checked + .s-fast{{background:#9a4a12;color:#fff5eb}}
+.sw input:checked + .s-off{{background:#2b313a;color:#e8eaed}}
 .nm{{font-weight:650;display:flex;gap:7px;align-items:center;flex-wrap:wrap}}
 .src{{font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;
      background:#23282f;color:#8b98a5;text-transform:uppercase;letter-spacing:.04em}}
@@ -222,53 +232,62 @@ textarea{{width:100%;background:#171a1f;color:#e8eaed;border:1px solid #23282f;b
 </form>
 </div>
 <script>
-const boxes=[...document.querySelectorAll('input[type=checkbox]')];
+const cards=[...document.querySelectorAll('.card')];
 const cnt=document.getElementById('cnt');
-function paint(b){{b.closest('label').classList.toggle('on',b.checked)}}
-function recount(){{cnt.textContent=boxes.filter(b=>b.checked).length}}
-boxes.forEach(b=>{{paint(b);b.addEventListener('change',()=>{{paint(b);recount()}})}});
+function mode(c){{return c.querySelector('input:checked').value}}
+function paint(c){{c.className='card m-'+mode(c)+(c.classList.contains('hide')?' hide':'')}}
+function recount(){{
+  const n=m=>cards.filter(c=>mode(c)===m).length;
+  cnt.textContent=n('own')+' свой · '+n('fast')+' быстрый';
+}}
+cards.forEach(c=>c.addEventListener('change',()=>{{paint(c);recount()}}));
 document.getElementById('q').addEventListener('input',e=>{{
   const q=e.target.value.trim().toLowerCase();
-  document.querySelectorAll('.grid > label').forEach(l=>{{
-    l.classList.toggle('hide', q && !l.dataset.k.includes(q));
-  }});
+  cards.forEach(c=>c.classList.toggle('hide', q && !c.dataset.k.includes(q)));
   document.querySelectorAll('h2[data-g]').forEach(h=>{{
     const g=document.querySelector('.grid[data-g="'+h.dataset.g+'"]');
-    const any=[...g.children].some(l=>!l.classList.contains('hide'));
+    const any=[...g.children].some(c=>!c.classList.contains('hide'));
     h.classList.toggle('hide',!any); g.classList.toggle('hide',!any);
   }});
 }});
 document.querySelectorAll('.pick').forEach(p=>p.addEventListener('click',()=>{{
   const g=document.querySelector('.grid[data-g="'+p.dataset.g+'"]');
-  const vis=[...g.children].filter(l=>!l.classList.contains('hide'));
-  const on=vis.every(l=>l.querySelector('input').checked);
-  vis.forEach(l=>{{const b=l.querySelector('input');b.checked=!on;paint(b)}});
+  [...g.children].filter(c=>!c.classList.contains('hide')).forEach(c=>{{
+    c.querySelector('input[value="'+p.dataset.m+'"]').checked=true; paint(c);
+  }});
   recount();
 }}));
 </script>
 """
 
 
-def read_enabled():
-    enabled = set()
+def read_policies():
+    """key -> 'own' | 'fast'. Отсутствие ключа означает «напрямую»."""
+    policies = {}
     with open(RULESETS) as fh:
         for line in fh:
             line = line.split("#", 1)[0].strip()
-            if line:
-                enabled.add(line if ":" in line else "vernette:" + line)
-    return enabled
+            if not line:
+                continue
+            parts = line.split()
+            key = parts[0] if ":" in parts[0] else "vernette:" + parts[0]
+            policies[key] = parts[1] if len(parts) > 1 else "own"
+    return policies
 
 
-def write_rulesets(enabled):
+def write_rulesets(policies):
     out = [
         "# Сгенерировано веб-интерфейсом http://192.168.88.6:8088",
-        "# Формат: «источник:набор». Строка без # — набор включён.",
+        "# Формат: «источник:набор политика». own — только свой VPS,",
+        "# fast — группа автовыбора (свой + резервные из подписки).",
+        "# Закомментированная строка = сервис идёт напрямую, мимо туннеля.",
         "",
     ]
     for group, items in CATALOG:
         out.append(f"# --- {group} ---")
         for key, _ in items:
-            out.append(key if key in enabled else f"# {key}")
+            p = policies.get(key)
+            out.append(f"{key} {p}" if p else f"# {key} own")
         out.append("")
     with open(RULESETS, "w") as fh:
         fh.write("\n".join(out) + "\n")
@@ -311,32 +330,45 @@ def status():
     return sb, tun, exit_ip
 
 
+MODES = [("off", "мимо"), ("own", "свой"), ("fast", "быстрый")]
+
+
 def render(message=""):
-    enabled = read_enabled()
+    policies = read_policies()
     out = []
     for gi, (group, items) in enumerate(CATALOG):
         out.append(f'<h2 data-g="{gi}">{html.escape(group)}'
-                   f'<span class="pick" data-g="{gi}">все / никого</span></h2>')
+                   f'<span class="pick" data-g="{gi}" data-m="own">все → свой</span>'
+                   f'<span class="pick" data-g="{gi}" data-m="fast">все → быстрый</span>'
+                   f'<span class="pick" data-g="{gi}" data-m="off">все → мимо</span></h2>')
         out.append(f'<div class="grid" data-g="{gi}">')
         for key, desc in items:
             source, name = key.split(":", 1)
-            chk = " checked" if key in enabled else ""
+            cur = policies.get(key, "off")
             cls = " vr" if source == "vernette" else ""
             search_key = html.escape(f"{name} {desc} {group}".lower(), quote=True)
+            seg = "".join(
+                f'<label class="sw"><input type="radio" name="p:{html.escape(key)}"'
+                f' value="{m}"{" checked" if cur == m else ""}>'
+                f'<span class="s-{m}">{lbl}</span></label>'
+                for m, lbl in MODES
+            )
             out.append(
-                f'<label data-k="{search_key}">'
-                f'<input type="checkbox" name="rs" value="{html.escape(key)}"{chk}>'
-                f'<span><span class="nm">{html.escape(name)}'
-                f'<span class="src{cls}">{source[:2]}</span></span>'
-                f'<span class="desc">{html.escape(desc)}</span></span></label>'
+                f'<div class="card m-{cur}" data-k="{search_key}">'
+                f'<div class="nm">{html.escape(name)}'
+                f'<span class="src{cls}">{source[:2]}</span></div>'
+                f'<div class="desc">{html.escape(desc)}</div>'
+                f'<div class="seg">{seg}</div></div>'
             )
         out.append("</div>")
 
     sb, tun, exit_ip = status()
+    n_own = sum(1 for v in policies.values() if v == "own")
+    n_fast = sum(1 for v in policies.values() if v == "fast")
     return PAGE.format(
         message=message,
         groups="\n".join(out),
-        count=len(enabled),
+        count=f"{n_own} свой · {n_fast} быстрый",
         services=html.escape(open(SERVICES).read()),
         networks=html.escape(open(NETWORKS).read()),
         sb=sb, sb_class="ok" if sb == "active" else "bad",
@@ -390,8 +422,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         form = urllib.parse.parse_qs(self.rfile.read(length).decode())
 
-        known = {k for _, items in CATALOG for k, _ in items}
-        write_rulesets(set(form.get("rs", [])) & known)
+        policies = {}
+        for key in (k for _, items in CATALOG for k, _ in items):
+            mode = form.get(f"p:{key}", ["off"])[0]
+            if mode in ("own", "fast"):
+                policies[key] = mode
+        write_rulesets(policies)
         for path, field in ((SERVICES, "services"), (NETWORKS, "networks")):
             if field in form:
                 with open(path, "w") as fh:

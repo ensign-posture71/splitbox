@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = os.path.join(ROOT, "secrets", "reality-vps.env")
 TPL = os.path.join(ROOT, "vm", "sing-box", "config.template.json")
 SERVICES = os.path.join(ROOT, "sync", "abroad-services.list")
+BACKUP = os.path.join(ROOT, "vm", "sing-box", "backup-outbounds.json")
 NETWORKS = os.path.join(ROOT, "sync", "abroad-networks.list")
 RULESETS = os.path.join(ROOT, "sync", "rulesets.list")
 
@@ -131,21 +132,29 @@ def load_rulesets():
             line = line.split("#", 1)[0].strip()
             if not line:
                 continue
-            source, _, name = line.partition(":")
+            # Формат: «источник:набор [политика]». Политика — own или fast,
+            # по умолчанию own: свой сервер безопаснее чужого, поэтому
+            # умолчание должно быть консервативным.
+            parts = line.split()
+            key = parts[0]
+            policy = parts[1] if len(parts) > 1 else "own"
+            if policy not in ("own", "fast"):
+                sys.exit(f"ОШИБКА: неизвестная политика '{policy}' в {RULESETS}")
+            source, _, name = key.partition(":")
             if not name:                       # запись без источника — vernette
                 source, name = "vernette", source
             if source not in SOURCES:
                 sys.exit(f"ОШИБКА: неизвестный источник '{source}' в {RULESETS}")
-            entries.append((source, name))
+            entries.append((source, name, policy))
 
     entries = sorted(set(entries))
-    sets, tags = [], []
-    for source, name in entries:
+    sets, tags = [], {"own": [], "fast": []}
+    for source, name, policy in entries:
         url_tpl, prefix = SOURCES[source]
         # Префикс в теге обязателен: у источников есть одноимённые наборы
         # (netflix, telegram), и без него они бы затёрли друг друга.
         tag = f"{prefix}-{name}"
-        tags.append(tag)
+        tags[policy].append(tag)
         sets.append({
             "type": "remote",
             "tag": tag,
@@ -155,6 +164,17 @@ def load_rulesets():
             "update_interval": RULESET_UPDATE,
         })
     return sets, tags
+
+
+def load_backup():
+    """Резервные серверы из подписки (готовит vm/parse-subscription.py)."""
+    if not os.path.exists(BACKUP):
+        return []
+    with open(BACKUP) as fh:
+        try:
+            return json.load(fh)
+        except json.JSONDecodeError:
+            sys.exit(f"ОШИБКА: {BACKUP} повреждён — перезапустите parse-subscription.py")
 
 
 def main():
@@ -167,7 +187,8 @@ def main():
     env.update(load_networks())
 
     rule_sets, rule_tags = load_rulesets()
-    env["RULESET_TAGS"] = rule_tags
+    env["RULESET_TAGS_OWN"] = rule_tags["own"]
+    env["RULESET_TAGS_FAST"] = rule_tags["fast"]
 
     with open(TPL) as fh:
         template = json.load(fh)
@@ -180,9 +201,35 @@ def main():
         cfg["route"]["rule_set"] = rule_sets
     else:
         cfg["route"].pop("rule_set", None)
-        cfg["route"]["rules"] = [
-            r for r in cfg["route"]["rules"] if "rule_set" not in r
-        ]
+
+    # --- Резервные серверы и группа автовыбора -------------------------------
+    backup = load_backup()
+    cfg["outbounds"].extend(backup)
+    if backup:
+        # urltest сам меряет задержку и берёт лучший. Свой сервер включён
+        # в группу наравне: если он быстрее, трафик останется на нём.
+        cfg["outbounds"].append({
+            "type": "urltest",
+            "tag": "fast-out",
+            "outbounds": ["reality-out"] + [o["tag"] for o in backup],
+            "url": "https://www.gstatic.com/generate_204",
+            "interval": "5m",
+            "tolerance": 60,
+            "idle_timeout": "30m",
+        })
+    else:
+        # Без подписки группы нет — правило «fast» должно указывать на свой
+        # сервер, иначе конфиг ссылался бы на несуществующий outbound.
+        for rule in cfg["route"]["rules"]:
+            if rule.get("outbound") == "fast-out":
+                rule["outbound"] = "reality-out"
+
+    # Пустые правила по наборам выбрасываются: sing-box не принимает
+    # rule_set с пустым массивом.
+    cfg["route"]["rules"] = [
+        r for r in cfg["route"]["rules"]
+        if r.get("rule_set") != [] and r.get("ip_cidr") != [] and r.get("domain") != []
+    ]
 
     leftover = PLACEHOLDER.findall(json.dumps(cfg))
     if leftover:
