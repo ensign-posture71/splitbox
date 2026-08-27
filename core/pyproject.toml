@@ -28,7 +28,7 @@ dev = ["pytest>=8"]
 include = ["splitbox*"]
 
 [tool.setuptools.package-data]
-splitbox = ["template.json"]
+splitbox = ["template.json", "api/templates/*.html", "api/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

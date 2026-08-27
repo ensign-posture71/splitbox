@@ -122,11 +122,32 @@ def _collect_backups() -> list[dict]:
 
 # --- Онбординг ---------------------------------------------------------------
 
+def _setup_gate(request: Request) -> HTMLResponse | None:
+    """До установки пароля вебка на VPS торчит в интернет — окно, в которое
+    пароль мог бы поставить кто угодно. Инсталлер генерирует одноразовый
+    токен и печатает ссылку с ним; без токена мастер не открывается.
+    Дома (без переменной) токен не требуется."""
+    import os
+    expected = os.environ.get("SPLITBOX_SETUP_TOKEN", "")
+    if not expected:
+        return None
+    got = request.query_params.get("token", "") or \
+        request.cookies.get("splitbox_setup", "")
+    if got == expected:
+        return None
+    return HTMLResponse(
+        "<h1>Нужна ссылка из установщика</h1>"
+        "<p>Откройте адрес вида /setup?token=… — он напечатан "
+        "в конце установки (splitbox install).</p>", status_code=403)
+
+
 @app.get("/setup", response_class=HTMLResponse)
 def setup_page(request: Request):
     cfg = state.get()
     if cfg.admin.password_hash and not _logged_in(request, cfg):
         return RedirectResponse("/login", status_code=303)
+    if not cfg.admin.password_hash and (gate := _setup_gate(request)):
+        return gate
     step = int(request.query_params.get("step", "1"))
     if cfg.admin.password_hash and step == 1:
         step = 2
@@ -136,7 +157,13 @@ def setup_page(request: Request):
         ctx["peer"] = peer
     if step == 5:
         ctx["tunnel"] = health.probe_tunnel()
-    return _page(request, "setup.html", cfg, **ctx)
+    resp = _page(request, "setup.html", cfg, **ctx)
+    token = request.query_params.get("token", "")
+    if token:
+        # токен переезжает в cookie, чтобы POST-формы мастера не таскали его
+        resp.set_cookie("splitbox_setup", token, httponly=True,
+                        samesite="strict", max_age=3600)
+    return resp
 
 
 @app.post("/setup/password")
@@ -145,6 +172,8 @@ def setup_password(request: Request, password: str = Form(...),
     cfg = state.get()
     if cfg.admin.password_hash:
         return _redirect("/setup?step=2")
+    if gate := _setup_gate(request):
+        return gate
     if len(password) < 8:
         return _redirect("/setup?step=1", err="Пароль короче 8 символов")
     if password != password2:

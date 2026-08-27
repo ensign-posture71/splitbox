@@ -1,0 +1,17 @@
+# Оверлей режима домашнего шлюза (lan-gateway).
+# Запуск: docker compose -f compose.yaml -f compose.lan.yaml up -d
+#
+# gateway переходит в host network и получает NET_ADMIN: tproxy-перехват
+# транзита LAN требует nftables, ip rule и локального маршрута — их ставит
+# супервизор gateway (и снимает при остановке). AdGuard начинает слушать
+# :53 на адресе хоста — инсталлер обязан освободить порт от
+# systemd-resolved (stub listener), иначе AdGuard не поднимется.
+services:
+  gateway:
+    network_mode: host
+    ports: !reset []
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      MODE: lan-gateway
