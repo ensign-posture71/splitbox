@@ -123,7 +123,17 @@ def tproxy_harness_ok() -> bool:
 
 def setup_lan_network() -> None:
     log("режим lan-gateway: ставлю обвязку tproxy")
-    Path("/proc/sys/net/ipv4/ip_forward").write_text("1")
+    # На docker-хосте ip_forward обычно уже включён (docker его требует),
+    # а /proc/sys в host-network контейнере может быть read-only — тогда
+    # не пишем, а проверяем.
+    forward = Path("/proc/sys/net/ipv4/ip_forward")
+    try:
+        forward.write_text("1")
+    except OSError:
+        if forward.read_text().strip() != "1":
+            raise RuntimeError(
+                "net.ipv4.ip_forward=0 и /proc/sys недоступен на запись — "
+                "включите форвардинг на хосте: sysctl -w net.ipv4.ip_forward=1")
     # ip rule/route идемпотентны через предварительное удаление
     subprocess.run(["ip", "rule", "del", "fwmark", str(FWMARK),
                     "lookup", str(RTABLE)], capture_output=True)

@@ -26,6 +26,13 @@
     устройствами и ключами. Храните его в надёжном месте: с ним коробку можно
     поднять заново за минуту.</p>
     <a class="btn ghost" href="/settings/backup">Скачать config.yaml</a>
+    <form method="post" action="/settings/restore" enctype="multipart/form-data"
+          class="stack" style="margin-top:14px"
+          onsubmit="return confirm('Текущие настройки будут ЗАМЕНЕНЫ содержимым бэкапа. Продолжить?')">
+      <input type="file" name="backup" accept=".yaml,.yml" required
+             style="color:#8b98a5;font-size:13px">
+      <button class="ghost" type="submit">Восстановить из бэкапа</button>
+    </form>
   </div>
 
   <div class="card">

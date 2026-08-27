@@ -10,11 +10,15 @@
 """
 from __future__ import annotations
 
+import json
+import urllib.request
 from pathlib import Path
 
 import yaml
 
 from .model import Config
+
+API = "http://127.0.0.1:3000"
 
 # schema_version намеренно старый из проверенных: AdGuard мигрирует старую
 # схему вверх сам, а слишком новую от чужой версии — отвергает.
@@ -44,6 +48,32 @@ def default_config(cfg: Config) -> dict:
             "id": 1,
         }],
     }
+
+
+def set_protection(enabled: bool, timeout: int = 5) -> bool:
+    """Тумблер защиты через API AdGuard (без auth: users пуст, слушает
+    только localhost внутри netns стека). False = AdGuard не ответил —
+    не ошибка страницы: настройка сохранена в config.yaml и применится
+    к bootstrap'у при пересоздании."""
+    req = urllib.request.Request(
+        f"{API}/control/protection",
+        data=json.dumps({"enabled": enabled}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except OSError:
+        return False
+
+
+def protection_enabled(timeout: int = 5) -> bool | None:
+    """None = AdGuard не отвечает."""
+    try:
+        with urllib.request.urlopen(f"{API}/control/status",
+                                    timeout=timeout) as resp:
+            return bool(json.load(resp).get("protection_enabled"))
+    except (OSError, ValueError):
+        return None
 
 
 def write_if_missing(cfg: Config, conf_dir: Path) -> bool:

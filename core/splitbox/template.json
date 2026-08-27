@@ -24,10 +24,10 @@
     "//": "Резолвер коробки — локальный AdGuard в том же сетевом пространстве (sidecar через network_mode: service:gateway). Наружу уходит уже его собственный запрос — по DoH и от его имени. Внешний DoH напрямую не используется: он делал схему заметной (донорское D20) и не резолвил DDNS-имена некоторых VPS.",
     "servers": [
       {
-        "type": "udp",
+        "type": "tcp",
         "tag": "dns-endpoint",
         "server": "127.0.0.1",
-        "//": "AdGuard Home, порт 53 в общем netns стека."
+        "//": "AdGuard Home, порт 53 в общем netns стека. TCP, а не UDP, намеренно: dual-stack UDP-сокет AdGuard в host-network окружении не мог ответить на 127.0.0.1 (sendmsg: invalid argument, найдено на учениях lan-режима) — по TCP ответ ходит везде, а кэш AdGuard и sing-box гасит накладные расходы."
       }
     ],
     "strategy": "ipv4_only",
@@ -114,7 +114,7 @@
     ],
     "final": "direct",
     "//final": "direct, а НЕ туннель: всё, что не совпало по спискам, идёт напрямую (fail-open философия). В режиме lan-gateway цена ошибки — лишний хоп; в режиме vps direct означает выход с адреса VPS, о чём UI говорит явно.",
-    "auto_detect_interface": true,
+    "//auto_detect_interface": "У донора стоял auto_detect_interface: true (страховка от петель в tun-схемах). Здесь его НЕТ намеренно: tproxy-перехват живёт только в prerouting, собственные соединения sing-box не метятся и петли не образуют, а monitor интерфейсов в экзотических окружениях (host-network в Docker Desktop VM) ломался с ошибкой «no route to internet» на все outbound'ы и даже на bind WG-endpoint.",
     "default_domain_resolver": "dns-endpoint",
     "//default_domain_resolver": "Обязателен начиная с sing-box 1.12: без него проверка падает с deprecation-фаталом."
   }

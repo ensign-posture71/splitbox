@@ -158,3 +158,39 @@ def test_setup_token_gate(client, monkeypatch):
     assert r.status_code == 303
     # после установки пароля токен больше не нужен
     assert client.get("/setup?step=2").status_code == 200
+
+
+def test_restore_backup_roundtrip(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    backup = client.get("/settings/backup").text
+
+    # ломаем состояние и восстанавливаем
+    from splitbox.api import state
+    state.update(lambda c: c.own_servers.clear())
+    assert state.get().own_servers == []
+    r = client.post("/settings/restore",
+                    files={"backup": ("config.yaml", backup, "text/yaml")},
+                    follow_redirects=False)
+    assert "err=" not in r.headers["location"], r.headers["location"]
+    assert state.get().own_servers[0].server == "nl.example.net"
+
+
+def test_restore_rejects_garbage(client):
+    _onboard(client)
+    from splitbox.api import state
+    before = state.get().admin.password_hash
+    r = client.post("/settings/restore",
+                    files={"backup": ("x.yaml", "just: garbage", "text/yaml")},
+                    follow_redirects=False)
+    assert "err=" in r.headers["location"]
+    assert state.get().admin.password_hash == before   # ничего не затёрто
+
+
+def test_own_server_delete(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    from splitbox.api import state
+    assert len(state.get().own_servers) == 1
+    client.post("/subscriptions/own/0/delete")
+    assert state.get().own_servers == []

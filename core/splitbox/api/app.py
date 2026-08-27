@@ -18,12 +18,14 @@ import threading
 import urllib.parse
 
 import segno
-from fastapi import FastAPI, Form, Request
+import yaml
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
+from .. import adguard as adguard_mod
 from .. import apply as apply_mod
 from .. import catalog, health, subs, wg
 from ..model import (Config, DomainRule, Mode, NetworkRule, OwnServer, Policy,
@@ -522,6 +524,31 @@ def subscription_delete(request: Request, sub_id: str):
     return _redirect("/subscriptions", msg=msg or "Подписка удалена", err=err)
 
 
+@app.post("/subscriptions/own/{idx}/delete")
+def own_server_delete(request: Request, idx: int):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    if not (0 <= idx < len(cfg.own_servers)):
+        return _redirect("/subscriptions", err="Нет такого сервера")
+    cfg = state.update(lambda c: c.own_servers.pop(idx))
+    msg, err = _try_apply(cfg)
+    return _redirect("/subscriptions", msg=msg or "Сервер удалён", err=err)
+
+
+@app.post("/subscriptions/manual/{idx}/delete")
+def manual_node_delete(request: Request, idx: int):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    if not (0 <= idx < len(cfg.manual_nodes)):
+        return _redirect("/subscriptions", err="Нет такой ссылки")
+    state.update(lambda c: c.manual_nodes.pop(idx))
+    _collect_backups()
+    msg, err = _try_apply(state.get())
+    return _redirect("/subscriptions", msg=msg or "Ссылка удалена", err=err)
+
+
 @app.post("/subscriptions/refresh")
 def subscriptions_refresh(request: Request):
     cfg = state.get()
@@ -562,6 +589,9 @@ def settings_save(request: Request, endpoint_host: str = Form(""),
         if password:
             c.admin.password_hash = auth.hash_password(password)
     cfg = state.update(put)
+    # Живой тумблер AdGuard — через его API; провал не роняет сохранение
+    # (config.yaml уже записан, bootstrap применит при пересоздании).
+    adguard_mod.set_protection(cfg.dns.adblock)
     msg, err = _try_apply(cfg)
     return _redirect("/settings", msg=msg or "Сохранено", err=err)
 
@@ -576,6 +606,31 @@ def settings_backup(request: Request):
         return PlainTextResponse("конфига ещё нет", status_code=404)
     return PlainTextResponse(paths.CONFIG.read_text(), headers={
         "Content-Disposition": 'attachment; filename="splitbox-config.yaml"'})
+
+
+@app.post("/settings/restore")
+def settings_restore(request: Request, backup: UploadFile = File(...)):
+    """Восстановление из бэкапа: файл валидируется моделью ЦЕЛИКОМ до
+    записи — битый или чужой YAML не должен затереть рабочее состояние."""
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    try:
+        raw = backup.file.read(1 << 20)
+        data = yaml.safe_load(raw)
+        if not isinstance(data, dict):
+            raise ValueError("это не config.yaml")
+        from .. import store as store_mod
+        restored = Config.model_validate(store_mod.migrate(data))
+    except Exception as exc:      # noqa: BLE001 — покажем пользователю
+        return _redirect("/settings", err=f"Бэкап не принят: {exc}")
+    if not restored.admin.password_hash:
+        return _redirect("/settings", err="Бэкап не принят: в нём нет пароля")
+    state.replace(restored)
+    _collect_backups()
+    msg, err = _try_apply(state.get())
+    return _redirect("/settings",
+                     msg=msg and "Восстановлено из бэкапа. " + msg, err=err)
 
 
 # --- Планировщик суточного refresh -------------------------------------------

@@ -1,0 +1,13 @@
+# Dev-оверлей: код пакета монтируется поверх установленного в образ —
+# правки применяются перезапуском контейнера, без пересборки образа
+# (и без зависимости от доступности PyPI в момент итерации).
+#   docker compose -f compose.yaml [-f compose.lan.yaml] -f compose.dev.yaml up -d
+services:
+  init:
+    volumes:
+      - ./core/splitbox:/usr/local/lib/python3.13/site-packages/splitbox:ro
+      - ./catalogs:/opt/splitbox/catalogs:ro
+  app:
+    volumes:
+      - ./core/splitbox:/usr/local/lib/python3.13/site-packages/splitbox:ro
+      - ./catalogs:/opt/splitbox/catalogs:ro

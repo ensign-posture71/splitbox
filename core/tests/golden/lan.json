@@ -16,7 +16,7 @@
   "dns": {
     "servers": [
       {
-        "type": "udp",
+        "type": "tcp",
         "tag": "dns-endpoint",
         "server": "127.0.0.1"
       }
@@ -155,7 +155,6 @@
       }
     ],
     "final": "direct",
-    "auto_detect_interface": true,
     "default_domain_resolver": "dns-endpoint",
     "rule_set": [
       {

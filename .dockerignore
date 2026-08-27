@@ -1,0 +1,6 @@
+core/.venv
+**/__pycache__
+**/*.egg-info
+state
+.env
+core/tests
