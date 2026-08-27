@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}splitbox{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+<body>
+<div class="wrap">
+{% block nav %}
+<header>
+  <h1>splitbox</h1>
+  <span class="sub">{% block subtitle %}умный туннель для дома{% endblock %}</span>
+</header>
+<nav>
+  {% set page = request.url.path %}
+  <a href="/" class="{{ 'active' if page == '/' }}">Статус</a>
+  <a href="/services" class="{{ 'active' if page == '/services' }}">Сервисы</a>
+  <a href="/devices" class="{{ 'active' if page == '/devices' }}">Устройства</a>
+  <a href="/subscriptions" class="{{ 'active' if page == '/subscriptions' }}">Серверы</a>
+  <a href="/lists" class="{{ 'active' if page == '/lists' }}">Свои списки</a>
+  <a href="/settings" class="{{ 'active' if page == '/settings' }}">Настройки</a>
+  <form method="post" action="/logout"><button class="ghost" type="submit">Выйти</button></form>
+</nav>
+{% endblock %}
+{% if msg %}<div class="msg ok">{{ msg }}</div>{% endif %}
+{% if err %}<div class="msg bad">{{ err }}</div>{% endif %}
+{% block content %}{% endblock %}
+</div>
+</body>
+</html>

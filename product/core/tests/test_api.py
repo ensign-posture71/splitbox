@@ -1,0 +1,142 @@
+"""Интеграционные тесты веб-приложения: онбординг, авторизация, страницы.
+
+Сеть и перезапуск sing-box подменяются: тесты гоняют логику и состояние,
+а не туннель. Боевой путь apply проверяется на стенде (см. план, фаза 1).
+"""
+import importlib
+
+import pytest
+
+VLESS = ("vless://11111111-2222-3333-4444-555555555555@nl.example.net:443"
+         "?security=reality&pbk=PUBKEY&sid=ab12&fp=chrome&sni=cdn.example.org"
+         "&type=tcp#NL-1")
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPLITBOX_STATE", str(tmp_path))
+    # paths вычисляются при импорте — перечитываем модули под новый STATE
+    from splitbox import paths
+    importlib.reload(paths)
+    from splitbox import apply as apply_mod
+    importlib.reload(apply_mod)
+    from splitbox.api import state, app as app_mod
+    importlib.reload(state)
+    importlib.reload(app_mod)
+
+    monkeypatch.setattr(app_mod.apply_mod, "apply",
+                        lambda cfg: "Применено (тест)")
+    from fastapi.testclient import TestClient
+    return TestClient(app_mod.app)
+
+
+def _onboard(client, password="secret123"):
+    client.post("/setup/password",
+                data={"password": password, "password2": password})
+
+
+def test_root_redirects_to_setup(client):
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/setup"
+
+
+def test_password_too_short(client):
+    r = client.post("/setup/password",
+                    data={"password": "short", "password2": "short"},
+                    follow_redirects=False)
+    assert "step=1" in r.headers["location"]
+
+
+def test_onboarding_with_own_server(client):
+    _onboard(client)
+    r = client.post("/setup/source", data={"link": VLESS},
+                    follow_redirects=False)
+    assert "step=3" in r.headers["location"], r.headers["location"]
+
+    r = client.post("/setup/device", data={"name": "Айфон"},
+                    follow_redirects=False)
+    assert "step=4" in r.headers["location"]
+
+    from splitbox.api import state
+    cfg = state.get()
+    assert cfg.own_servers[0].server == "nl.example.net"
+    assert cfg.own_servers[0].reality_public_key == "PUBKEY"
+    # пресет политик включился сам
+    assert cfg.policies.rulesets
+    assert cfg.wireguard.peers[0].name == "Айфон"
+    assert cfg.wireguard.private_key
+
+    # QR и conf отдаются
+    peer = cfg.wireguard.peers[0]
+    assert client.get(f"/devices/{peer.id}/qr.svg").status_code == 200
+    conf = client.get(f"/devices/{peer.id}/conf").text
+    assert "AllowedIPs = 0.0.0.0/0, ::/0" in conf
+
+
+def test_bad_link_shows_error(client):
+    _onboard(client)
+    r = client.post("/setup/source", data={"link": "ftp://junk"},
+                    follow_redirects=False)
+    assert "step=2" in r.headers["location"]
+    assert "err=" in r.headers["location"]
+
+
+def test_login_flow(client):
+    _onboard(client)
+    client.cookies.clear()
+    r = client.get("/services", follow_redirects=False)
+    assert r.headers["location"] == "/login"
+    r = client.post("/login", data={"password": "wrong"},
+                    follow_redirects=False)
+    assert "err=" in r.headers["location"]
+    r = client.post("/login", data={"password": "secret123"},
+                    follow_redirects=False)
+    assert r.headers["location"] == "/"
+    assert client.get("/services").status_code == 200
+
+
+def test_services_save(client):
+    _onboard(client)
+    r = client.post("/services", data={"p:vernette:youtube": "fast",
+                                       "p:vernette:openai": "own",
+                                       "p:vernette:rkn": "off"},
+                    follow_redirects=False)
+    from splitbox.api import state
+    policies = state.get().policies.rulesets
+    assert policies["vernette:youtube"].value == "fast"
+    assert policies["vernette:openai"].value == "own"
+    assert "vernette:rkn" not in policies      # off не хранится
+
+
+def test_lists_save_and_validation(client):
+    _onboard(client)
+    client.post("/lists", data={"row": ["d|fast|rezka.ag",
+                                        "n|own|91.108.4.0/22",
+                                        "d|own|"]})       # пустая строка — мимо
+    from splitbox.api import state
+    cfg = state.get()
+    assert cfg.policies.domains[0].value == "rezka.ag"
+    assert cfg.policies.networks[0].value == "91.108.4.0/22"
+
+    r = client.post("/lists", data={"row": ["n|own|не-подсеть"]},
+                    follow_redirects=False)
+    assert "err=" in r.headers["location"]
+    # плохая строка не затёрла хорошее состояние
+    assert state.get().policies.networks[0].value == "91.108.4.0/22"
+
+
+def test_device_add_delete(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    client.post("/devices/add", data={"name": "Ноут"})
+    from splitbox.api import state
+    peers = state.get().wireguard.peers
+    assert peers[0].name == "Ноут"
+    client.post(f"/devices/{peers[0].id}/delete")
+    assert state.get().wireguard.peers == []
+
+
+def test_backup_download(client):
+    _onboard(client)
+    r = client.get("/settings/backup")
+    assert "password_hash" in r.text

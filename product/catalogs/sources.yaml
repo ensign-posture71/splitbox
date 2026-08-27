@@ -1,0 +1,19 @@
+# Источники готовых наборов правил (.srs). sing-box скачивает их сам
+# по update_interval — никаких cron-скриптов.
+#
+# vernette   — заточен под Россию: «недоступно из РФ», реестр РКН и сервисы
+#              с учётом местной специфики. Содержит и домены, и подсети,
+#              поэтому покрывает протоколы без SNI (Telegram MTProto).
+# metacubex  — meta-rules-dat. Глобальный посервисный каталог, сотни наборов.
+#              Берётся ради гранулярности: отдельно Netflix, отдельно Steam.
+#
+# Префикс в теге обязателен: у источников есть одноимённые наборы
+# (netflix, telegram), и без него они бы затёрли друг друга.
+sources:
+  vernette:
+    url: "https://raw.githubusercontent.com/vernette/rulesets/master/srs/{}.srs"
+    prefix: vr
+  metacubex:
+    url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/{}.srs"
+    prefix: mc
+update_interval: 1d

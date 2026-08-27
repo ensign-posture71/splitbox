@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% macro row(kind, value, policy) %}
+<div class="trow m-{{ policy }}" data-kind="{{ kind }}" data-mode="{{ policy }}">
+  <input type="text" value="{{ value }}"
+    placeholder="{{ 'домен' if kind == 'd' else 'подсеть, например 91.108.4.0/22' }}">
+  <input type="hidden" name="row" value="{{ kind }}|{{ policy }}|{{ value }}">
+  <span class="seg">
+    {% for m, lbl in [('off','мимо'), ('own','свой'), ('fast','быстрый')] %}
+    <span class="s-{{ m }} seg-btn" data-m="{{ m }}">{{ lbl }}</span>
+    {% endfor %}
+  </span>
+  <span class="del" title="удалить строку">×</span>
+</div>
+{% endmacro %}
+{% block content %}
+<form method="post" action="/lists">
+<h2>Свои домены<span class="pick" data-add="d">+ строка</span></h2>
+<div class="hint">Чего нет в готовых наборах. Поддомены покрываются автоматически:
+<code>rezka.ag</code> покрывает и <code>hd.rezka.ag</code>.</div>
+<div class="tbl" id="t-d">
+  {% for r in domains %}{{ row('d', r.value, r.policy.value) }}{% endfor %}
+  {{ row('d', '', 'own') }}
+</div>
+
+<h2>Свои подсети<span class="pick" data-add="n">+ строка</span></h2>
+<div class="hint">Только для протоколов <b>без имени хоста</b> — например Telegram
+MTProto. Общие облачные диапазоны сюда класть нельзя: отсеивать попутчиков
+после этого правила уже некому.</div>
+<div class="tbl" id="t-n">
+  {% for r in networks %}{{ row('n', r.value, r.policy.value) }}{% endfor %}
+  {{ row('n', '', 'own') }}
+</div>
+
+<div style="margin-top:20px"><button type="submit">Применить</button></div>
+</form>
+
+<script>
+// Значение и политика склеены в ОДНОМ поле «kind|policy|value» на строку:
+// параллельные списки в формах запрещены — в доноре они однажды разъехались
+// (parse_qs без keep_blank_values), и записи получили чужие режимы.
+function sync(row){
+  const val=row.querySelector('input[type=text]').value.trim();
+  row.querySelector('input[type=hidden]').value=
+    row.dataset.kind+'|'+row.dataset.mode+'|'+val;
+}
+function rowMode(row,m){
+  row.dataset.mode=m;
+  row.className='trow m-'+m;
+  sync(row);
+}
+function bindRow(row){
+  row.querySelectorAll('.seg-btn').forEach(b=>
+    b.addEventListener('click',()=>rowMode(row,b.dataset.m)));
+  row.querySelector('.del').addEventListener('click',()=>{
+    const t=row.parentElement; row.remove();
+    if(!t.children.length) addRow(t.id.slice(2));
+  });
+  const inp=row.querySelector('input[type=text]');
+  inp.addEventListener('input',()=>{
+    sync(row);
+    const t=row.parentElement;
+    if(row===t.lastElementChild && inp.value.trim()) addRow(t.id.slice(2));
+  });
+}
+function addRow(kind,focus){
+  const t=document.getElementById('t-'+kind);
+  const src=t.lastElementChild||t.firstElementChild;
+  const row=src.cloneNode(true);
+  row.querySelector('input[type=text]').value='';
+  rowMode(row,'own');
+  t.appendChild(row); bindRow(row);
+  if(focus) row.querySelector('input[type=text]').focus();
+}
+document.querySelectorAll('.trow').forEach(r=>{bindRow(r);sync(r)});
+document.querySelectorAll('.pick[data-add]').forEach(p=>
+  p.addEventListener('click',()=>addRow(p.dataset.add,true)));
+</script>
+{% endblock %}

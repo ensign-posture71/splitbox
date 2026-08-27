@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="post" action="/services">
+<div class="bar"><div class="row">
+  <input type="search" id="q" placeholder="Поиск по сервисам…" autocomplete="off" style="flex:1 1 260px;width:auto">
+  <span class="count"><b id="cnt"></b></span>
+  <button type="submit">Применить</button>
+</div></div>
+
+{% for group in groups %}
+<h2 data-g="{{ loop.index0 }}">{{ group.name }}
+  <span class="pick" data-g="{{ loop.index0 }}" data-m="own">все → свой</span>
+  <span class="pick" data-g="{{ loop.index0 }}" data-m="fast">все → быстрый</span>
+  <span class="pick" data-g="{{ loop.index0 }}" data-m="off">все → мимо</span></h2>
+<div class="grid" data-g="{{ loop.index0 }}">
+  {% for item in group['items'] %}
+  {% set cur = policies.get(item.key, 'off') %}
+  <div class="card m-{{ cur }}" data-k="{{ (item.title ~ ' ' ~ item.desc ~ ' ' ~ group.name)|lower }}">
+    <div class="nm">{{ item.title }}
+      <span class="src {{ 'vr' if item.key.startswith('vernette') }}">{{ item.key[:2] }}</span></div>
+    <div class="desc">{{ item.desc }}</div>
+    <div class="seg">
+      {% for m, lbl in [('off','мимо'), ('own','свой'), ('fast','быстрый')] %}
+      <label class="sw"><input type="radio" name="p:{{ item.key }}" value="{{ m }}"
+        {{ 'checked' if cur == m }}><span class="s-{{ m }}">{{ lbl }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+<div style="margin-top:20px"><button type="submit">Применить</button></div>
+</form>
+
+<script>
+const cards=[...document.querySelectorAll('.card')];
+const cnt=document.getElementById('cnt');
+function mode(c){return c.querySelector('input:checked').value}
+function paint(c){c.className='card m-'+mode(c)+(c.classList.contains('hide')?' hide':'')}
+function recount(){
+  const n=m=>cards.filter(c=>mode(c)===m).length;
+  cnt.textContent=n('own')+' свой · '+n('fast')+' быстрый';
+}
+cards.forEach(c=>c.addEventListener('change',()=>{paint(c);recount()}));
+recount();
+document.getElementById('q').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  cards.forEach(c=>c.classList.toggle('hide', q && !c.dataset.k.includes(q)));
+  document.querySelectorAll('h2[data-g]').forEach(h=>{
+    const g=document.querySelector('.grid[data-g="'+h.dataset.g+'"]');
+    const any=[...g.children].some(c=>!c.classList.contains('hide'));
+    h.classList.toggle('hide',!any); g.classList.toggle('hide',!any);
+  });
+});
+document.querySelectorAll('.pick[data-g]').forEach(p=>p.addEventListener('click',()=>{
+  const g=document.querySelector('.grid[data-g="'+p.dataset.g+'"]');
+  [...g.children].filter(c=>!c.classList.contains('hide')).forEach(c=>{
+    c.querySelector('input[value="'+p.dataset.m+'"]').checked=true; paint(c);
+  });
+  recount();
+}));
+</script>
+{% endblock %}

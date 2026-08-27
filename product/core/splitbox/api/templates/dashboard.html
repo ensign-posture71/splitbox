@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="lights">
+  <div class="light {{ 'ok' if tunnel.ok else 'bad' }}">
+    <div class="t">Туннель</div>
+    <div class="v {{ 'ok' if tunnel.ok else 'bad' }}">
+      {% if tunnel.ok %}работает{% else %}не работает{% endif %}
+    </div>
+    <div class="hint">
+      {% if tunnel.ok %}выход: {{ tunnel.exit_ip }}{% if tunnel.country %} ({{ tunnel.country }}){% endif %}
+      {% else %}{{ tunnel.error or "нет ответа от туннеля" }}{% endif %}
+    </div>
+  </div>
+  <div class="light {{ 'ok' if dns_ok else 'bad' }}">
+    <div class="t">DNS и блокировка рекламы</div>
+    <div class="v {{ 'ok' if dns_ok else 'bad' }}">{{ "работает" if dns_ok else "не отвечает" }}</div>
+    <div class="hint">{{ "AdGuard Home отвечает на запросы" if dns_ok else "проверьте контейнер adguard" }}</div>
+  </div>
+  <div class="light ok">
+    <div class="t">Серверы</div>
+    <div class="v">{{ cfg.enabled_own()|length }} свой · {{ n_backups }} резерв</div>
+    <div class="hint">{{ n_subs }} подписк{{ "а" if n_subs == 1 else "и" if 1 < n_subs < 5 else "ок" }} включено</div>
+  </div>
+</div>
+
+<h2>Устройства</h2>
+{% if cfg.wireguard.peers %}
+<table class="list">
+  <tr><th>Название</th><th>Адрес</th><th>Добавлено</th></tr>
+  {% for p in cfg.wireguard.peers %}
+  <tr><td>{{ p.name }}</td><td><code>{{ p.address }}</code></td>
+      <td class="muted">{{ p.created[:10] }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="sub">Пока ни одного устройства. <a href="/devices" style="color:#f97316">Добавить</a></p>
+{% endif %}
+
+{% if mode == 'vps' %}
+<p class="hint" style="margin-top:22px">Режим VPS: всё, что не попало в списки
+сервисов, выходит в интернет с адреса этого сервера. «Российские сайты как
+из дома» доступны только в режиме домашнего шлюза.</p>
+{% endif %}
+{% endblock %}
