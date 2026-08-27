@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block nav %}{% endblock %}
+{% block content %}
+<div class="center">
+  <div class="steps">
+    {% for s in range(1, 6) %}<span class="{{ 'done' if s <= step }}"></span>{% endfor %}
+  </div>
+
+  {% if msg %}<div class="msg ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="msg bad">{{ err }}</div>{% endif %}
+
+  {% if step == 1 %}
+  <div class="card">
+    <h1>Добро пожаловать</h1>
+    <p class="sub" style="margin-bottom:18px">Придумайте пароль для этой страницы —
+    он понадобится, чтобы менять настройки.</p>
+    <form class="stack" method="post" action="/setup/password">
+      <input type="password" name="password" placeholder="Пароль (минимум 8 символов)" autofocus required>
+      <input type="password" name="password2" placeholder="Ещё раз" required>
+      <button type="submit">Дальше</button>
+    </form>
+  </div>
+
+  {% elif step == 2 %}
+  <div class="card">
+    <h1>Откуда брать туннель</h1>
+    <p class="sub" style="margin-bottom:18px">Вставьте ссылку на подписку вашего
+    VPN-провайдера (начинается с https://) или ссылку на свой сервер
+    (начинается с vless://).</p>
+    <form class="stack" method="post" action="/setup/source">
+      <input type="text" name="link" placeholder="https://…  или  vless://…" autofocus required>
+      <button type="submit">Проверить и подключить</button>
+    </form>
+    <p class="hint">Проверка займёт до минуты: коробка скачает список серверов
+    и запустит туннель.</p>
+  </div>
+
+  {% elif step == 3 %}
+  <div class="card">
+    <h1>Первое устройство</h1>
+    <p class="sub" style="margin-bottom:18px">Как назвать устройство, которое
+    подключим первым? Например «Айфон Лены».</p>
+    <form class="stack" method="post" action="/setup/device">
+      <input type="text" name="name" placeholder="Название устройства" autofocus required>
+      <button type="submit">Создать</button>
+    </form>
+  </div>
+
+  {% elif step == 4 %}
+  <div class="card">
+    <h1>Подключите устройство</h1>
+    {% if peer %}
+    <ol class="sub" style="margin:10px 0 16px;padding-left:18px;line-height:2">
+      <li>Поставьте приложение <b>WireGuard</b> из App Store / Google Play</li>
+      <li>В приложении: «+» → «Создать из QR-кода»</li>
+      <li>Наведите камеру на код ниже</li>
+      <li>Включите тумблер</li>
+    </ol>
+    <div class="qr"><img src="/devices/{{ peer.id }}/qr.svg" alt="QR для WireGuard"></div>
+    <p class="hint">Или <a href="/devices/{{ peer.id }}/conf" style="color:#f97316">скачайте
+    файл конфигурации</a> для компьютера.</p>
+    {% endif %}
+    <form method="get" action="/setup" style="margin-top:16px">
+      <input type="hidden" name="step" value="5">
+      <button type="submit">Готово, проверить</button>
+    </form>
+  </div>
+
+  {% elif step == 5 %}
+  <div class="card">
+    <h1>{% if tunnel.ok %}Всё работает{% else %}Почти готово{% endif %}</h1>
+    {% if tunnel.ok %}
+    <p class="sub" style="margin:12px 0">Туннель поднят. Выход в интернет —
+    <b class="ok">{{ tunnel.exit_ip }}</b>
+    {% if tunnel.country %}({{ tunnel.country }}){% endif %}</p>
+    <p class="sub">Заблокированные сервисы уже включены разумным набором —
+    посмотреть и поменять можно на вкладке «Сервисы».</p>
+    {% else %}
+    <p class="sub" style="margin:12px 0">Туннель пока не отвечает:
+    <b class="bad">{{ tunnel.error or "нет ответа" }}</b></p>
+    <p class="sub">Это бывает сразу после запуска — подождите полминуты
+    и обновите страницу.</p>
+    {% endif %}
+    <a class="btn" href="/" style="margin-top:16px">Открыть панель</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

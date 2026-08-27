@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(420px,1fr))">
+  <div class="card">
+    <div class="nm">Основное</div>
+    <form class="stack" method="post" action="/settings" style="margin-top:10px">
+      <label class="hint">Внешний адрес коробки (IP или домен) — попадает
+      в конфиги устройств</label>
+      <input type="text" name="endpoint_host" value="{{ cfg.endpoint_host }}"
+             placeholder="1.2.3.4 или box.example.com">
+      <label class="hint" style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" name="adblock" value="1" style="width:auto"
+               {{ 'checked' if cfg.dns.adblock }}>
+        Блокировать рекламу (AdGuard)
+      </label>
+      <label class="hint">Новый пароль (пусто = не менять)</label>
+      <input type="password" name="password" placeholder="Новый пароль">
+      <input type="password" name="password2" placeholder="Ещё раз">
+      <button type="submit">Сохранить</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="nm">Резервная копия</div>
+    <p class="desc" style="margin:8px 0 14px">Один файл со всеми настройками,
+    устройствами и ключами. Храните его в надёжном месте: с ним коробку можно
+    поднять заново за минуту.</p>
+    <a class="btn ghost" href="/settings/backup">Скачать config.yaml</a>
+  </div>
+
+  <div class="card">
+    <div class="nm">Режим</div>
+    <p class="desc" style="margin:8px 0">
+      {% if mode == 'vps' %}
+      <b>VPS</b> — устройства подключаются через WireGuard. Весь «прочий»
+      трафик выходит с адреса этого сервера.
+      {% else %}
+      <b>Домашний шлюз</b> — коробка стоит в вашей сети и обслуживает
+      и WireGuard-устройства, и всю локальную сеть.
+      {% endif %}
+    </p>
+    <p class="hint">Режим задаётся при установке (переменная MODE в .env).</p>
+  </div>
+</div>
+{% endblock %}

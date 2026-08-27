@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block nav %}{% endblock %}
+{% block content %}
+<div class="center">
+  <div class="card">
+    <h1>splitbox</h1>
+    <p class="sub" style="margin-bottom:18px">Вход в управление</p>
+    <form class="stack" method="post" action="/login">
+      <input type="password" name="password" placeholder="Пароль" autofocus required>
+      <button type="submit">Войти</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

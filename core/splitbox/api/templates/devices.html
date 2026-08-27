@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not endpoint_host %}
+<div class="msg bad">Не задан внешний адрес коробки — QR-коды не будут работать.
+Укажите его в <a href="/settings" style="color:#f97316">настройках</a>.</div>
+{% endif %}
+
+<h2>Добавить устройство</h2>
+<form method="post" action="/devices/add" class="row" style="max-width:520px">
+  <input type="text" name="name" placeholder="Например: Айфон Лены" required style="flex:1;width:auto">
+  <button type="submit">Добавить</button>
+</form>
+
+<h2>Подключённые устройства</h2>
+{% set show = request.query_params.get('show', '') %}
+{% if peers %}
+<div class="grid">
+  {% for p in peers %}
+  <div class="card">
+    <div class="nm">{{ p.name }}</div>
+    <div class="desc"><code>{{ p.address }}</code> · добавлено {{ p.created[:10] }}</div>
+    <details {{ 'open' if p.id == show }}>
+      <summary class="hint" style="cursor:pointer">Показать QR и файл</summary>
+      <div class="qr" style="margin-top:10px"><img src="/devices/{{ p.id }}/qr.svg" alt="QR"></div>
+      <p class="hint"><a href="/devices/{{ p.id }}/conf" style="color:#f97316">Скачать .conf</a>
+      — для компьютера или повторной настройки.</p>
+      <p class="hint">Приложение WireGuard → «+» → «Создать из QR-кода».</p>
+    </details>
+    <form method="post" action="/devices/{{ p.id }}/delete"
+          onsubmit="return confirm('Отключить устройство «{{ p.name }}»? Оно потеряет доступ.')">
+      <button class="danger" type="submit">Отключить</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="sub">Пока пусто — добавьте первое устройство выше.</p>
+{% endif %}
+
+<p class="hint" style="margin-top:22px">Если на устройстве пропал интернет —
+выключите тумблер в приложении WireGuard, всё вернётся как было.</p>
+{% endblock %}

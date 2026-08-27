@@ -1,0 +1,294 @@
+# Каталог сервисов для веб-интерфейса. Перенесён из vm/webui/vpn-ui.py
+# (CATALOG) — хранится в коробке, а не читается из сети: страница должна
+# открываться и когда GitHub недоступен.
+#
+# key      — «источник:набор» из catalogs/sources.yaml
+# default  — политика пресета онбординга (own | fast | off): нетехнарь не
+#            должен настраивать каталог, чтобы «просто заработало». Пресет
+#            снят с боевой домашней конфигурации (sync/rulesets.list).
+groups:
+  - name: Базовое для РФ
+    items:
+      - key: vernette:unavailable-in-russia
+        title: Недоступное из России
+        desc: >-
+          Всё, что недоступно из России — сервисы, которые сами блокируют
+          российские адреса. Закрывает «а почему этот сайт не открылся»
+          и нужен для облаков IoT (Bosch, Ubiquiti). ~730 доменов.
+        default: fast
+      - key: vernette:rkn
+        title: Реестр РКН
+        desc: >-
+          Реестр заблокированного в РФ. Огромный и с мусором — мошеннические
+          сайты, спам. Для дома скорее вреден.
+        default: "off"
+  - name: Мессенджеры
+    items:
+      - key: vernette:telegram
+        title: Telegram
+        desc: Telegram — домены и подсети дата-центров
+        default: own
+      - key: vernette:whatsapp
+        title: WhatsApp
+        desc: WhatsApp
+        default: fast
+      - key: vernette:discord-full
+        title: Discord
+        desc: Discord целиком
+        default: fast
+      - key: vernette:telegram-voice-chats
+        title: Голос Telegram
+        desc: Голос Telegram — если пропадает звук
+        default: "off"
+      - key: vernette:discord-voice-chats
+        title: Голос Discord
+        desc: Голос Discord — если пропадает звук
+        default: "off"
+  - name: Соцсети
+    items:
+      - key: vernette:instagram
+        title: Instagram
+        desc: Instagram
+        default: fast
+      - key: vernette:x
+        title: X (Twitter)
+        desc: X (Twitter)
+        default: "off"
+      - key: vernette:linkedin
+        title: LinkedIn
+        desc: LinkedIn
+        default: "off"
+      - key: vernette:tiktok
+        title: TikTok
+        desc: TikTok
+        default: fast
+      - key: metacubex:facebook
+        title: Facebook
+        desc: Facebook
+        default: "off"
+      - key: metacubex:reddit
+        title: Reddit
+        desc: Reddit
+        default: "off"
+  - name: Нейросети
+    items:
+      - key: vernette:openai
+        title: ChatGPT
+        desc: ChatGPT, OpenAI API
+        default: own
+      - key: vernette:claude
+        title: Claude
+        desc: Claude
+        default: own
+      - key: metacubex:anthropic
+        title: Anthropic
+        desc: Anthropic — API и сайт
+        default: own
+      - key: vernette:gemini
+        title: Gemini
+        desc: Google Gemini, AI Studio
+        default: own
+      - key: vernette:grok
+        title: Grok
+        desc: Grok, x.ai
+        default: own
+      - key: vernette:copilot
+        title: Copilot
+        desc: GitHub Copilot, Microsoft Copilot
+        default: own
+  - name: Видео и музыка
+    items:
+      - key: vernette:youtube
+        title: YouTube
+        desc: YouTube и googlevideo
+        default: fast
+      - key: vernette:netflix
+        title: Netflix
+        desc: Netflix
+        default: fast
+      - key: vernette:spotify
+        title: Spotify
+        desc: Spotify
+        default: fast
+      - key: metacubex:twitch
+        title: Twitch
+        desc: Twitch
+        default: fast
+      - key: metacubex:soundcloud
+        title: SoundCloud
+        desc: SoundCloud
+        default: fast
+      - key: metacubex:disney
+        title: Disney+
+        desc: Disney+
+        default: fast
+      - key: metacubex:hbo
+        title: HBO Max
+        desc: HBO Max
+        default: fast
+      - key: metacubex:primevideo
+        title: Prime Video
+        desc: Prime Video
+        default: fast
+      - key: metacubex:bbc
+        title: BBC
+        desc: BBC
+        default: fast
+      - key: metacubex:imdb
+        title: IMDb
+        desc: IMDb
+        default: fast
+  - name: Работа и разработка
+    items:
+      - key: metacubex:notion
+        title: Notion
+        desc: Notion
+        default: fast
+      - key: metacubex:figma
+        title: Figma
+        desc: Figma
+        default: "off"
+      - key: metacubex:canva
+        title: Canva
+        desc: Canva
+        default: "off"
+      - key: metacubex:github
+        title: GitHub
+        desc: GitHub
+        default: "off"
+      - key: metacubex:jetbrains
+        title: JetBrains
+        desc: JetBrains — IDE и лицензии
+        default: "off"
+      - key: metacubex:docker
+        title: Docker Hub
+        desc: Docker Hub
+        default: "off"
+      - key: metacubex:atlassian
+        title: Jira, Confluence
+        desc: Jira, Confluence
+        default: "off"
+      - key: metacubex:slack
+        title: Slack
+        desc: Slack
+        default: "off"
+      - key: metacubex:zoom
+        title: Zoom
+        desc: Zoom
+        default: "off"
+      - key: metacubex:dropbox
+        title: Dropbox
+        desc: Dropbox
+        default: "off"
+      - key: metacubex:vercel
+        title: Vercel
+        desc: Vercel
+        default: "off"
+      - key: metacubex:netlify
+        title: Netlify
+        desc: Netlify
+        default: "off"
+      - key: metacubex:heroku
+        title: Heroku
+        desc: Heroku
+        default: "off"
+      - key: metacubex:digitalocean
+        title: DigitalOcean
+        desc: DigitalOcean
+        default: "off"
+  - name: Платежи и покупки
+    items:
+      - key: metacubex:paypal
+        title: PayPal
+        desc: PayPal
+        default: own
+      - key: metacubex:ebay
+        title: eBay
+        desc: eBay
+        default: "off"
+      - key: metacubex:booking
+        title: Booking.com
+        desc: Booking.com
+        default: "off"
+      - key: metacubex:airbnb
+        title: Airbnb
+        desc: Airbnb
+        default: "off"
+      - key: metacubex:amazon
+        title: Amazon
+        desc: Amazon
+        default: "off"
+  - name: Игры
+    items:
+      - key: metacubex:steam
+        title: Steam
+        desc: Steam
+        default: "off"
+      - key: metacubex:epicgames
+        title: Epic Games
+        desc: Epic Games
+        default: "off"
+      - key: metacubex:playstation
+        title: PlayStation Network
+        desc: PlayStation Network
+        default: "off"
+      - key: metacubex:xbox
+        title: Xbox Live
+        desc: Xbox Live
+        default: "off"
+      - key: metacubex:nintendo
+        title: Nintendo
+        desc: Nintendo
+        default: "off"
+  - name: Обучение
+    items:
+      - key: metacubex:coursera
+        title: Coursera
+        desc: Coursera
+        default: "off"
+      - key: metacubex:udemy
+        title: Udemy
+        desc: Udemy
+        default: "off"
+      - key: metacubex:duolingo
+        title: Duolingo
+        desc: Duolingo
+        default: "off"
+  - name: Прочее
+    items:
+      - key: metacubex:medium
+        title: Medium
+        desc: Medium
+        default: own
+      - key: metacubex:patreon
+        title: Patreon
+        desc: Patreon
+        default: own
+      - key: metacubex:pornhub
+        title: Pornhub
+        desc: Pornhub
+        default: own
+      - key: metacubex:adobe
+        title: Adobe
+        desc: Adobe — облако и активация
+        default: "off"
+      - key: metacubex:apple-music
+        title: Apple Music
+        desc: Apple Music
+        default: fast
+      - key: metacubex:apple-tvplus
+        title: Apple TV+
+        desc: Apple TV+
+        default: fast
+      - key: metacubex:apple-update
+        title: Обновления Apple
+        desc: Обновления Apple
+        default: "off"
+      - key: metacubex:microsoft
+        title: Microsoft
+        desc: Microsoft
+        default: "off"
+      - key: metacubex:cloudflare
+        title: Cloudflare
+        desc: Cloudflare — сервисы, не CDN
+        default: "off"

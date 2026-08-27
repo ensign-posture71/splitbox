@@ -1,0 +1,207 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "/var/lib/sing-box/cache.db",
+      "store_rdrc": true
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090"
+    }
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "udp",
+        "tag": "dns-endpoint",
+        "server": "127.0.0.1"
+      }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "0.0.0.0",
+      "listen_port": 7895
+    },
+    {
+      "type": "mixed",
+      "tag": "local-probe",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "vless",
+      "tag": "own-vps",
+      "server": "vps.example.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "packet_encoding": "xudp",
+      "domain_resolver": "dns-endpoint",
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.example.org",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "0123ab"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "bk-nl-1",
+      "server": "nl.example.net",
+      "server_port": 443,
+      "uuid": "aaa",
+      "packet_encoding": "xudp"
+    },
+    {
+      "type": "trojan",
+      "tag": "bk-de-1",
+      "server": "de.example.net",
+      "server_port": 443,
+      "password": "x",
+      "tls": {
+        "enabled": true,
+        "server_name": "de.example.net"
+      }
+    },
+    {
+      "type": "urltest",
+      "tag": "fast-out",
+      "outbounds": [
+        "own-vps",
+        "bk-nl-1",
+        "bk-de-1"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "5m",
+      "tolerance": 60,
+      "idle_timeout": "30m"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "inbound": [
+          "local-probe"
+        ],
+        "outbound": "own-vps"
+      },
+      {
+        "rule_set": [
+          "mc-notion",
+          "vr-youtube"
+        ],
+        "outbound": "fast-out"
+      },
+      {
+        "rule_set": [
+          "vr-openai"
+        ],
+        "outbound": "own-vps"
+      },
+      {
+        "ip_cidr": [
+          "91.108.4.0/22"
+        ],
+        "outbound": "own-vps"
+      },
+      {
+        "domain": [
+          "rezka.ag"
+        ],
+        "domain_suffix": [
+          ".rezka.ag"
+        ],
+        "outbound": "fast-out"
+      },
+      {
+        "domain": [
+          "example-own.com"
+        ],
+        "domain_suffix": [
+          ".example-own.com"
+        ],
+        "outbound": "own-vps"
+      }
+    ],
+    "final": "direct",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-endpoint",
+    "rule_set": [
+      {
+        "type": "remote",
+        "tag": "mc-notion",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/notion.srs",
+        "download_detour": "direct",
+        "update_interval": "1d"
+      },
+      {
+        "type": "remote",
+        "tag": "vr-openai",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/vernette/rulesets/master/srs/openai.srs",
+        "download_detour": "direct",
+        "update_interval": "1d"
+      },
+      {
+        "type": "remote",
+        "tag": "vr-youtube",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/vernette/rulesets/master/srs/youtube.srs",
+        "download_detour": "direct",
+        "update_interval": "1d"
+      }
+    ]
+  },
+  "endpoints": [
+    {
+      "type": "wireguard",
+      "tag": "wg-in",
+      "system": false,
+      "address": [
+        "10.99.0.1/24"
+      ],
+      "private_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+      "listen_port": 51820,
+      "peers": [
+        {
+          "public_key": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8=",
+          "allowed_ips": [
+            "10.99.0.2/32"
+          ]
+        }
+      ]
+    }
+  ]
+}
