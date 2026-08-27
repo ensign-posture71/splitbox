@@ -49,9 +49,27 @@ else
     TOKEN=$(sed -n 's/^SETUP_TOKEN=//p' .env)
 fi
 
+# --- порт 53 (только режим шлюза) --------------------------------------------
+# systemd-resolved держит stub-listener на 127.0.0.53:53 и в host-network
+# отбирает порт у AdGuard («address already in use» — поймано на учениях).
+# В режиме vps порт 53 наружу не публикуется и конфликта нет.
+MODE_NOW=$(sed -n 's/^MODE=//p' .env)
+if [ "$MODE_NOW" = "lan-gateway" ] && systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+    if ! [ -f /etc/systemd/resolved.conf.d/splitbox.conf ]; then
+        say "освобождаю порт 53 от systemd-resolved…"
+        mkdir -p /etc/systemd/resolved.conf.d
+        printf '[Resolve]\nDNSStubListener=no\n' > /etc/systemd/resolved.conf.d/splitbox.conf
+        systemctl restart systemd-resolved
+    fi
+fi
+
 # --- запуск ------------------------------------------------------------------
 say "собираю и запускаю стек (первый раз — несколько минут)…"
-docker compose up -d --build
+if [ "$MODE_NOW" = "lan-gateway" ]; then
+    docker compose -f compose.yaml -f compose.lan.yaml up -d --build
+else
+    docker compose up -d --build
+fi
 
 IP=$(curl -fsS -4 --max-time 10 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 WEB_PORT=$(sed -n 's/^WEB_PORT=//p' .env)

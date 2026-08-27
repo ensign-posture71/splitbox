@@ -43,10 +43,15 @@ docker compose -f compose.yaml -f compose.lan.yaml up -d
 
 Затем в роутере: DHCP-gateway и DNS → адрес коробки. При падении туннеля
 коробка сама снимает перехват — сеть продолжает работать напрямую
-(fail-open). При падении самой коробки верните DHCP обратно.
+(fail-open, проверено учениями: перехват снимается через ~60 с после
+обрыва и возвращается сам после починки). При падении самой коробки
+верните DHCP обратно.
 
 Требования: ядро с nftables и tproxy (обычный Debian/Ubuntu/Raspberry Pi OS
-подходит; Synology — нет, там доступен только режим vps).
+подходит; Synology — нет, там доступен только режим vps) и **rootful
+docker** — в rootless-режиме контейнер не может ставить `ip rule` и nft
+даже с NET_ADMIN. Инсталлер сам освобождает порт 53 от systemd-resolved;
+при ручной установке это нужно сделать до запуска стека.
 
 ## Разработка
 
@@ -61,9 +66,25 @@ Golden-конфиги (`core/tests/golden/`) проверяются настоя
 check` — при изменении рендера дифф виден в git.
 
 Локальный стенд: `docker compose up -d --build`, вебка на
-http://localhost:8443. Проверка WG-пути без телефона — sing-box на хосте
-как клиент (endpoint wireguard на 127.0.0.1:51820, ключи пира из
-`/devices/{id}/conf`).
+http://localhost:8443. Правки кода без пересборки образа — оверлей
+`compose.dev.yaml` (монтирует пакет поверх site-packages). Проверка
+WG-пути без телефона — sing-box на хосте как клиент (endpoint wireguard
+на 127.0.0.1:51820, ключи пира из `/devices/{id}/conf`).
+
+**Стенд для lan-режима — только настоящее ядро Linux.** Docker Desktop
+не годится: в его linuxkit-ядре nft-правило `tproxy` считает пакеты, но
+не доставляет их сокету (проверено голым `IP_TRANSPARENT`-листенером).
+Рабочий стенд — Lima:
+
+```bash
+limactl start --name=splitbox template://docker
+limactl shell splitbox -- sudo sh -c "systemctl unmask docker containerd; systemctl start containerd docker"
+docker save splitbox-app splitbox-gateway adguard/adguardhome:v0.107.52 | limactl shell splitbox -- sudo docker load
+limactl shell splitbox -- sudo sh -c "cd $PWD && MODE=lan-gateway docker compose -f compose.yaml -f compose.lan.yaml -f compose.dev.yaml up -d --no-build"
+```
+
+Rootful docker обязателен: в rootless-режиме `ip rule` и nft недоступны
+даже с NET_ADMIN.
 
 ## Архитектура и решения
 
