@@ -1,0 +1,79 @@
+# Splitbox — базовый стек (режим vps: вход только через WireGuard).
+# Режим домашнего шлюза: docker compose -f compose.yaml -f compose.lan.yaml up -d
+#
+# Архитектура — один владелец сетевого пространства (gateway) и sidecar'ы
+# через network_mode: service:gateway. Это реплика LXC-донора: общий
+# 127.0.0.1, health-проба и clash_api не видны снаружи, порты публикуются
+# один раз на gateway.
+name: splitbox
+
+services:
+  init:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    image: splitbox-app
+    command: ["python", "-m", "splitbox.bootstrap"]
+    volumes:
+      - state:/var/lib/splitbox
+    restart: "no"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/gateway/Dockerfile
+    image: splitbox-gateway
+    environment:
+      MODE: ${MODE:-vps}
+    ports:
+      - "${WG_PORT:-51820}:51820/udp"
+      # Вебка: после онбординга в режиме vps закройте порт фаерволом
+      # и ходите через WireGuard (http://10.99.0.1:8443).
+      - "${WEB_PORT:-8443}:8443"
+    volumes:
+      - state:/var/lib/splitbox
+      - singbox-cache:/var/lib/sing-box
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  adguard:
+    image: adguard/adguardhome:v0.107.52
+    network_mode: service:gateway
+    volumes:
+      - state:/var/lib/splitbox
+      - adguard-work:/opt/adguardhome/work
+    command: ["--config", "/var/lib/splitbox/adguard/conf/AdGuardHome.yaml",
+              "--work-dir", "/opt/adguardhome/work", "--no-check-update"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    image: splitbox-app
+    network_mode: service:gateway
+    environment:
+      # Одноразовый токен первичной настройки (генерирует install.sh):
+      # пока пароль не установлен, мастер открывается только по ссылке
+      # с этим токеном. Пусто = токен не требуется (домашняя установка).
+      SPLITBOX_SETUP_TOKEN: ${SETUP_TOKEN:-}
+    volumes:
+      - state:/var/lib/splitbox
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  state:
+  singbox-cache:
+  adguard-work:

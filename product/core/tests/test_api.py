@@ -140,3 +140,21 @@ def test_backup_download(client):
     _onboard(client)
     r = client.get("/settings/backup")
     assert "password_hash" in r.text
+
+
+def test_setup_token_gate(client, monkeypatch):
+    """На VPS до установки пароля мастер открывается только по ссылке
+    с токеном из инсталлера."""
+    monkeypatch.setenv("SPLITBOX_SETUP_TOKEN", "sekret")
+    assert client.get("/setup").status_code == 403
+    r = client.post("/setup/password",
+                    data={"password": "12345678", "password2": "12345678"})
+    assert r.status_code == 403
+    assert client.get("/setup?token=sekret").status_code == 200
+    # токен переехал в cookie — POST проходит
+    r = client.post("/setup/password",
+                    data={"password": "12345678", "password2": "12345678"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    # после установки пароля токен больше не нужен
+    assert client.get("/setup?step=2").status_code == 200
