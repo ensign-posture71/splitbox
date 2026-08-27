@@ -15,3 +15,6 @@ services:
       - NET_RAW
     environment:
       MODE: lan-gateway
+  init:
+    environment:
+      MODE: lan-gateway

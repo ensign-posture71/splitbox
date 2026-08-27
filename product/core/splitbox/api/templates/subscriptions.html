@@ -38,9 +38,13 @@
 <h2>Свои серверы</h2>
 {% if own_servers %}
 <table class="list">
-  <tr><th>Название</th><th>Адрес</th></tr>
+  <tr><th>Название</th><th>Адрес</th><th></th></tr>
   {% for s in own_servers %}
-  <tr><td>{{ s.name }}</td><td><code>{{ s.server }}:{{ s.server_port }}</code></td></tr>
+  <tr><td>{{ s.name }}</td><td><code>{{ s.server }}:{{ s.server_port }}</code></td>
+    <td><form method="post" action="/subscriptions/own/{{ loop.index0 }}/delete"
+          onsubmit="return confirm('Удалить сервер «{{ s.name }}»?')">
+        <button class="danger" type="submit" style="padding:5px 12px;font-size:12px">удалить</button></form></td>
+  </tr>
   {% endfor %}
 </table>
 {% else %}
@@ -51,7 +55,10 @@
 <h2>Ручные ссылки</h2>
 <table class="list">
   {% for link in manual_nodes %}
-  <tr><td><code>{{ link[:70] }}{% if link|length > 70 %}…{% endif %}</code></td></tr>
+  <tr><td><code>{{ link[:70] }}{% if link|length > 70 %}…{% endif %}</code></td>
+    <td><form method="post" action="/subscriptions/manual/{{ loop.index0 }}/delete">
+        <button class="danger" type="submit" style="padding:5px 12px;font-size:12px">удалить</button></form></td>
+  </tr>
   {% endfor %}
 </table>
 {% endif %}

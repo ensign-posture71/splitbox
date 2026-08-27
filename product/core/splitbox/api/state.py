@@ -26,3 +26,10 @@ def update(fn: Callable[[Config], None]) -> Config:
         fn(cfg)
         store.save(cfg, paths.CONFIG)
         return cfg
+
+
+def replace(cfg: Config) -> Config:
+    """Замена состояния целиком (восстановление из бэкапа)."""
+    with _lock:
+        store.save(cfg, paths.CONFIG)
+        return cfg

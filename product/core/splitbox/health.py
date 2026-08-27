@@ -48,17 +48,24 @@ def probe_tunnel(timeout: int = 10) -> TunnelStatus:
 
 def probe_dns(timeout: int = 5) -> bool:
     """AdGuard жив? Ручной DNS-запрос на 127.0.0.1:53 в общем netns —
-    dig/resolvectl в минимальном образе может не быть."""
+    dig/resolvectl в минимальном образе может не быть. TCP по той же
+    причине, что и в шаблоне sing-box: dual-stack UDP-сокет AdGuard
+    в host-network окружении не отвечает на 127.0.0.1."""
     import socket
+    import struct
     query = (b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"
              b"\x07example\x03com\x00\x00\x01\x00\x01")
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.settimeout(timeout)
     try:
-        s.sendto(query, ("127.0.0.1", 53))
-        data, _ = s.recvfrom(512)
-        return len(data) > 12 and data[:2] == b"\x12\x34"
+        s = socket.create_connection(("127.0.0.1", 53), timeout=timeout)
     except OSError:
+        return False
+    try:
+        s.settimeout(timeout)
+        s.sendall(struct.pack(">H", len(query)) + query)
+        ln = struct.unpack(">H", s.recv(2))[0]
+        data = s.recv(ln)
+        return len(data) > 12 and data[:2] == b"\x12\x34"
+    except (OSError, struct.error):
         return False
     finally:
         s.close()
