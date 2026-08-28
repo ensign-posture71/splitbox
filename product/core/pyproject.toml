@@ -22,7 +22,9 @@ api = [
     "itsdangerous>=2.1",
     "python-multipart>=0.0.9",
 ]
-dev = ["pytest>=8"]
+# httpx2 — транспорт starlette.TestClient; без него тесты API падают
+# на импорте в свежем окружении.
+dev = ["pytest>=8", "httpx2>=0.29"]
 
 [tool.setuptools.packages.find]
 include = ["splitbox*"]
