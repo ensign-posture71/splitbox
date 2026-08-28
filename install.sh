@@ -1,7 +1,12 @@
 #!/bin/sh
 # =============================================================================
 # Инсталлер Splitbox для чистого VPS (Ubuntu/Debian).
-#   curl -fsSL https://…/install.sh | sh
+#
+# Два способа запуска — репозиторий приватный, поэтому оба нужны:
+#   1) из распакованного архива:  sudo sh install.sh
+#      (архив делается командой `splitbox-pack`, см. README)
+#   2) из клона репозитория:      sudo sh product/install.sh
+#      (SPLITBOX_REPO=git@github.com:USER/splitbox.git — для обновлений)
 # =============================================================================
 # Что делает: ставит docker (если нет), кладёт файлы в /opt/splitbox,
 # генерирует .env с одноразовым токеном настройки, запускает стек и
@@ -9,8 +14,11 @@
 # не трогая настройки.
 set -eu
 
-REPO_URL="${SPLITBOX_REPO:-https://github.com/CHANGEME/splitbox}"
+REPO_URL="${SPLITBOX_REPO:-}"
 DIR=/opt/splitbox
+# Каталог, из которого запущен скрипт: если рядом лежит compose.yaml,
+# это распакованный архив или клон — клонировать ничего не нужно.
+SRC=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 say() { printf '\033[1;36m[splitbox]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[splitbox]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -25,13 +33,23 @@ fi
 docker compose version >/dev/null 2>&1 || die "нужен docker compose v2"
 
 # --- файлы -------------------------------------------------------------------
-if [ -d "$DIR/.git" ]; then
+if [ -f "$SRC/compose.yaml" ]; then
+    # Запуск из архива или клона: копируем в /opt/splitbox, сохраняя .env
+    # (rsync есть не везде — обходимся tar).
+    if [ "$SRC" != "$DIR" ]; then
+        say "разворачиваю в $DIR…"
+        mkdir -p "$DIR"
+        (cd "$SRC" && tar cf - --exclude=.env --exclude=state .) | (cd "$DIR" && tar xf -)
+    fi
+elif [ -d "$DIR/.git" ]; then
     say "обновляю $DIR…"
     git -C "$DIR" pull -q
-else
+elif [ -n "$REPO_URL" ]; then
     say "клонирую в $DIR…"
     command -v git >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq git; }
     git clone -q "$REPO_URL" "$DIR"
+else
+    die "нет исходников: распакуйте архив splitbox и запустите install.sh из него"
 fi
 cd "$DIR/product" 2>/dev/null || cd "$DIR"
 

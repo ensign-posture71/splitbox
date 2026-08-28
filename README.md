@@ -2,7 +2,7 @@
 
 Контейнерный стек «под ключ» для людей, которые ничего не понимают в VPN:
 подписка VLESS + WireGuard для устройств + блокировка рекламы + веб-панель.
-Наследник домашнего проекта Mikrotik-vpn (см. `../docs/`), упакованный так,
+Наследник домашнего проекта Mikrotik-vpn, упакованный так,
 чтобы ставиться одной командой без Mikrotik и Proxmox.
 
 ## Что внутри
@@ -17,26 +17,34 @@
 service:gateway`) — общий 127.0.0.1, наружу торчат только WireGuard (UDP)
 и вебка.
 
-## Установка на VPS (режим vps)
+## Как раздавать друзьям
+
+Репозиторий приватный, поэтому `curl | sh` прямо из него не работает.
+Соберите архив и отдайте его — файлом, ссылкой, чем угодно:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CHANGEME/splitbox/master/product/install.sh | sudo sh
+sh pack.sh
+```
+
+Получится `splitbox-<дата>.tar.gz`. Инструкция другу — две строки:
+
+```bash
+tar xzf splitbox-*.tar.gz && sudo sh splitbox/install.sh
 ```
 
 Инсталлер поставит docker, запустит стек и напечатает ссылку на мастер
 настройки (с одноразовым токеном). Дальше — вставить ссылку подписки,
 отсканировать QR приложением WireGuard, готово.
 
-В этом режиме весь «прочий» трафик выходит с адреса VPS. «Российские сайты
+В режиме vps весь «прочий» трафик выходит с адреса VPS. «Российские сайты
 как из дома» — только в режиме домашнего шлюза.
 
 ## Установка дома (режим lan-gateway)
 
-На мини-ПК/Raspberry Pi с docker:
+На мини-ПК/Raspberry Pi с docker — из распакованного архива или клона:
 
 ```bash
-git clone https://github.com/CHANGEME/splitbox /opt/splitbox
-cd /opt/splitbox/product
+cd splitbox
 cp .env.example .env          # MODE=lan-gateway
 docker compose -f compose.yaml -f compose.lan.yaml up -d
 ```
@@ -56,9 +64,9 @@ docker** — в rootless-режиме контейнер не может ста�
 ## Разработка
 
 ```bash
-cd product/core
+cd core
 python3 -m venv .venv && .venv/bin/pip install -e ".[api,dev]"
-.venv/bin/python -m pytest            # 52 теста, golden-конфиги
+.venv/bin/python -m pytest            # 55 тестов, golden-конфиги
 SPLITBOX_STATE=/tmp/sb .venv/bin/uvicorn splitbox.api.app:app --reload
 ```
 
@@ -88,8 +96,8 @@ Rootful docker обязателен: в rootless-режиме `ip rule` и nft �
 
 ## Архитектура и решения
 
-Журнал решений и грабель домашнего проекта-донора: `../docs/decisions.md`
-(D1–D26, O1–O35). Ключевое, что перенесено в код коробки:
+Журнал решений и грабель проекта-донора (D1–D26, O1–O35) живёт в его
+собственном репозитории. Ключевое, что перенесено сюда в код:
 
 * **fail-open**: `final: direct` в маршрутизации; сломанный туннель никогда
   не оставляет людей без интернета; kill-switch отсутствует намеренно;
