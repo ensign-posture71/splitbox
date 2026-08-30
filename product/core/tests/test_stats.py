@@ -183,3 +183,30 @@ def test_human_uptime_formats():
     assert sysstats.human_uptime(90) == "1м"
     assert sysstats.human_uptime(3700) == "1ч 1м"
     assert sysstats.human_uptime(200000) == "2д 7ч"
+
+
+def test_discovery_skips_public_addresses():
+    """Опрашивать чужие адреса в интернете нельзя — только свою сеть."""
+    from splitbox import discovery
+    assert discovery.lookup("8.8.8.8", timeout=0.1) == ""
+    assert discovery.lookup("127.0.0.1", timeout=0.1) == ""
+    assert discovery.lookup("не-адрес", timeout=0.1) == ""
+
+
+def test_discovery_cache_is_non_blocking(monkeypatch):
+    """Страница не должна ждать опрос устройства: первый вызов отдаёт
+    пусто, имя подтягивается фоном."""
+    import time
+    from splitbox import discovery
+    monkeypatch.setattr(discovery, "lookup",
+                        lambda ip, timeout=1.0: "Ноутбук")
+    cache = discovery.NameCache()
+    t0 = time.monotonic()
+    first = cache.get("192.168.1.5")
+    assert time.monotonic() - t0 < 0.2      # мгновенно
+    assert first == ""
+    for _ in range(50):
+        if cache.get("192.168.1.5"):
+            break
+        time.sleep(0.02)
+    assert cache.get("192.168.1.5") == "Ноутбук"
