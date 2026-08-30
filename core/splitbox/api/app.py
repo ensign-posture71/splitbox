@@ -27,7 +27,7 @@ from pathlib import Path
 
 from .. import adguard as adguard_mod
 from .. import apply as apply_mod
-from .. import catalog, charts, health, paths, stats, subs, sysstats, wg
+from .. import catalog, charts, discovery, health, paths, stats, subs, sysstats, wg
 from .. import render as render_mod
 from ..model import (Balancer, Config, DomainRule, Mode, NetworkRule,
                      OwnServer, Policy, Strategy, Subscription, WorkMode)
@@ -868,7 +868,12 @@ def _resolve_peer(ip: str) -> str:
         names.update({p.address: p.name for p in cfg.wireguard.peers})
         _peer_cache = names
         _peer_cache_at = _t.monotonic()
-    return _peer_cache.get(ip, ip)
+    known = _peer_cache.get(ip)
+    if known:
+        return known
+    # Никто не подсказал — спросим само устройство. Ответ придёт в кэш
+    # в фоне, поэтому первый показ может быть ещё с адресом.
+    return discovery.cache.get(ip) or ip
 
 
 def _with_names(rows: list[dict]) -> list[dict]:
@@ -889,6 +894,18 @@ def _with_names(rows: list[dict]) -> list[dict]:
         if name != peer:
             r["name"] = name
     return rows
+
+
+def _warm_names(rows: list[dict]) -> None:
+    """Разогреть кэш имён для адресов, которые встретились в статистике."""
+    import ipaddress
+    for r in rows:
+        peer = r.get("peer", "")
+        try:
+            ipaddress.ip_address(peer)
+        except ValueError:
+            continue
+        discovery.cache.get(peer)
 
 
 def _stats_conn():
