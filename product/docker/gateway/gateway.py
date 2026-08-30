@@ -113,6 +113,50 @@ def nft_delete(name: str) -> None:
                    capture_output=True)
 
 
+def own_addresses() -> set[str]:
+    """Собственные адреса машины — по ним распознаётся петля."""
+    out: set[str] = set()
+    r = run(["ip", "-4", "-o", "addr", "show"], check=False)
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if "inet" in parts:
+            addr = parts[parts.index("inet") + 1].split("/")[0]
+            if not addr.startswith("127."):
+                out.add(addr)
+    return out
+
+
+def loop_detected() -> str:
+    """Признак петли маршрутизации: перехват ловит трафик, отправленный
+    самой коробкой.
+
+    Так бывает, когда на роутере трафик заворачивается по интерфейсу
+    целиком, без исключения для адреса коробки: она отправляет пакет
+    наружу, роутер видит его как трафик из локальной сети и возвращает
+    обратно. Сеть в этом случае встаёт полностью, и понять причину
+    снаружи почти невозможно — поэтому коробка распознаёт её сама.
+
+    Возвращает пояснение или пустую строку.
+    """
+    mine = own_addresses()
+    if not mine:
+        return ""
+    r = run(["nft", "-j", "list", "counters"], check=False)
+    # Считаем не по счётчикам (их может не быть), а по факту: есть ли
+    # среди перехваченных соединений те, что пришли с нашего адреса.
+    conns = run(["ss", "-tn", "state", "established"], check=False).stdout
+    for line in conns.splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        local, peer = parts[-2], parts[-1]
+        l_ip = local.rsplit(":", 1)[0].strip("[]")
+        p_ip = peer.rsplit(":", 1)[0].strip("[]")
+        if l_ip in mine and p_ip in mine and l_ip != p_ip:
+            return f"соединение {local} -> {peer} внутри самой коробки"
+    return ""
+
+
 def tproxy_harness_ok() -> bool:
     if subprocess.run(["nft", "list", "table", "ip", "splitbox-tproxy"],
                       capture_output=True).returncode != 0:
@@ -263,6 +307,15 @@ class Supervisor:
                     setup_lan_network()
                 except RuntimeError as exc:
                     log(f"восстановить обвязку не удалось: {exc}")
+            # Петлю ищем только при включённом перехвате: без него её
+            # быть не может.
+            if MODE == "lan-gateway" and not self.failed_open:
+                why = loop_detected()
+                if why:
+                    log("ВНИМАНИЕ: похоже на петлю маршрутизации — " + why)
+                    log("  на роутере нужно правило-исключение для адреса "
+                        "этой коробки ВЫШЕ правила заворачивания трафика")
+
             if self.probe():
                 self.fails = 0
                 if self.failed_open:
