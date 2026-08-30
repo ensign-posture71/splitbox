@@ -173,7 +173,7 @@ sh pack.sh          # получится splitbox-<дата>.tar.gz
 ```bash
 cd core
 python3 -m venv .venv && .venv/bin/pip install -e ".[api,dev]"
-.venv/bin/python -m pytest                    # 55 тестов
+.venv/bin/python -m pytest                    # 59 тестов
 SPLITBOX_STATE=/tmp/sb .venv/bin/uvicorn splitbox.api.app:app --reload
 ```
 
