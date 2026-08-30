@@ -121,8 +121,16 @@ def tproxy_harness_ok() -> bool:
     return f"fwmark 0x{FWMARK:x} lookup {RTABLE}" in rules
 
 
-def setup_lan_network() -> None:
-    log("режим lan-gateway: ставлю обвязку tproxy")
+def setup_lan_network(with_tproxy: bool = True) -> None:
+    """Базовый слой ставится всегда, слой перехвата — отдельно.
+
+    Перехват включается ТОЛЬКО когда sing-box действительно работает.
+    Иначе свежая, ещё не настроенная коробка, назначенная шлюзом, уводила
+    бы весь трафик сети в порт, которого никто не слушает: интернет
+    пропадал бы до окончания настройки, а обновить её (тоже через сеть)
+    было бы уже нельзя.
+    """
+    log("режим lan-gateway: ставлю сетевую обвязку")
     # На docker-хосте ip_forward обычно уже включён (docker его требует),
     # а /proc/sys в host-network контейнере может быть read-only — тогда
     # не пишем, а проверяем.
@@ -141,7 +149,8 @@ def setup_lan_network() -> None:
     run(["ip", "route", "replace", "local", "0.0.0.0/0",
          "dev", "lo", "table", str(RTABLE)])
     nft_load(NFT_BASE)
-    nft_load(NFT_TPROXY)
+    if with_tproxy:
+        nft_load(NFT_TPROXY)
 
 
 def teardown_lan_network() -> None:
@@ -166,8 +175,20 @@ class Supervisor:
             self.proc = subprocess.Popen(
                 ["sing-box", "run", "-c", str(CONFIG)])
         log(f"sing-box запущен (pid {self.proc.pid})")
+        # Перехват включаем только теперь: до этого момента заворачивать
+        # трафик было некуда.
+        if MODE == "lan-gateway" and not self.failed_open:
+            try:
+                nft_load(NFT_TPROXY)
+                log("перехват LAN включён")
+            except RuntimeError as exc:
+                log(f"перехват включить не удалось: {exc}")
 
     def stop_singbox(self) -> None:
+        # Сначала снимаем перехват, потом гасим процесс: иначе между
+        # остановкой и следующим стартом трафик сети уходил бы в никуда.
+        if MODE == "lan-gateway":
+            nft_delete("splitbox-tproxy")
         with self.lock:
             proc, self.proc = self.proc, None
         if proc and proc.poll() is None:
@@ -234,8 +255,9 @@ class Supervisor:
             time.sleep(PROBE_PERIOD)
             if self.stopping or not CONFIG.exists():
                 continue
-            if MODE == "lan-gateway" and not self.failed_open \
-                    and not tproxy_harness_ok():
+            singbox_alive = self.proc is not None and self.proc.poll() is None
+            if (MODE == "lan-gateway" and not self.failed_open
+                    and singbox_alive and not tproxy_harness_ok()):
                 log("ОБВЯЗКА TPROXY ОТСУТСТВУЕТ — восстанавливаю")
                 try:
                     setup_lan_network()
@@ -264,7 +286,7 @@ class Supervisor:
     def main(self) -> None:
         if MODE == "lan-gateway":
             try:
-                setup_lan_network()
+                setup_lan_network(with_tproxy=False)
             except (RuntimeError, PermissionError, OSError) as exc:
                 log(f"ОШИБКА: обвязка lan-режима не установилась: {exc}")
                 log("на этом устройстве доступен только режим vps (WireGuard) —"
@@ -284,7 +306,8 @@ class Supervisor:
         signal.signal(signal.SIGINT, stop)
 
         while not CONFIG.exists():
-            log(f"жду конфиг {CONFIG} — откройте вебку и пройдите настройку")
+            log(f"жду конфиг {CONFIG} — откройте вебку и пройдите настройку "
+                "(перехват LAN пока выключен, сеть работает напрямую)")
             time.sleep(5)
 
         backoff = 1
