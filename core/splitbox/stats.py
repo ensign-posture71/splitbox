@@ -198,7 +198,14 @@ class Collector(threading.Thread):
                         # Системный срез — раз в минуту: чаще незачем,
                         # он и хранится с минутной гранулярностью.
                         if now - self._last_sys >= 60:
-                            self._sys.store(conn, self._sys.snapshot(now))
+                            first = self._sys.prev_at == 0
+                            row = self._sys.snapshot(now)
+                            # Первый срез после запуска — без предыдущего,
+                            # скорость в нём заведомо нулевая. Записывать
+                            # её значит рисовать провал на графике там,
+                            # где просто перезапустилась панель.
+                            if not first:
+                                self._sys.store(conn, row)
                             self._last_sys = now
                         if now - self._last_cleanup > 3600:
                             self.cleanup(conn, now, st.keep_days)
