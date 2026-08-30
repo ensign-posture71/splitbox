@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% macro balancer(group, bal, title, hint, tags) %}
+<div class="card">
+  <div class="nm">{{ title }}</div>
+  <div class="desc">{{ hint }}</div>
+  <label class="hint" style="margin-top:8px">Как выбирать сервер</label>
+  <div class="seg" style="align-self:stretch">
+    {% for val, lbl in [('latency','быстрейший'), ('pinned','закреплённый')] %}
+    <label class="sw" style="flex:1">
+      <input type="radio" name="bal.{{ group }}.strategy" value="{{ val }}"
+             {{ 'checked' if bal.strategy.value == val }}>
+      <span class="s-{{ 'fast' if val == 'latency' else 'own' }}"
+            style="text-align:center">{{ lbl }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="row" style="margin-top:10px;gap:8px">
+    <label class="hint" style="flex:1">Проверять каждые
+      <input type="text" name="bal.{{ group }}.interval" value="{{ bal.interval }}"
+             style="margin-top:4px" placeholder="5m"></label>
+    <label class="hint" style="flex:1">Допуск, мс
+      <input type="text" name="bal.{{ group }}.tolerance" value="{{ bal.tolerance }}"
+             style="margin-top:4px" placeholder="60"></label>
+  </div>
+  <label class="hint" style="margin-top:8px">Закреплённый сервер
+    <select name="bal.{{ group }}.pinned_tag"
+            style="width:100%;margin-top:4px;background:#171a1f;color:#e8eaed;
+                   border:1px solid #2b313a;border-radius:9px;padding:10px">
+      <option value="">— первый доступный —</option>
+      {% for t in tags %}
+      <option value="{{ t }}" {{ 'selected' if bal.pinned_tag == t }}>{{ t }}</option>
+      {% endfor %}
+    </select></label>
+  <div class="hint" style="margin-top:6px">Допуск — насколько новый сервер
+  должен выигрывать по задержке, чтобы туннель на него переключился.
+  Маленький допуск = частые перескоки.</div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h2>Добавить сервер или подписку</h2>
+<form method="post" action="/servers/add" class="row" style="max-width:860px">
+  <input type="text" name="name" placeholder="Название (необязательно)"
+         style="flex:0 1 220px;width:auto">
+  <input type="text" name="url" required style="flex:1;width:auto"
+         placeholder="https://ссылка-на-подписку   или   vless://ваш-сервер">
+  <button type="submit">Добавить</button>
+</form>
+<p class="hint">Ссылка <code>https://</code> — подписка провайдера (много серверов).
+<code>vless://</code> — ваш личный сервер. Добавлять можно сколько угодно и того, и другого.</p>
+
+<form method="post" action="/servers">
+<h2>Свои серверы
+  <span class="pick">доверенный выход</span></h2>
+{% if cfg.own_servers %}
+<table class="list">
+  <tr><th>Название</th><th>Адрес</th><th>Вкл</th><th>в «свой»</th><th>в «быстрый»</th><th></th></tr>
+  {% for s in cfg.own_servers %}
+  <tr>
+    <td><input type="text" name="own.{{ loop.index0 }}.name" value="{{ s.name }}"
+               style="max-width:220px"></td>
+    <td><code>{{ s.server }}:{{ s.server_port }}</code></td>
+    <td><input type="checkbox" name="own.{{ loop.index0 }}.enabled" value="1"
+               {{ 'checked' if s.enabled }}></td>
+    <td><input type="checkbox" name="own.{{ loop.index0 }}.in_own" value="1"
+               {{ 'checked' if s.in_own }}></td>
+    <td><input type="checkbox" name="own.{{ loop.index0 }}.in_fast" value="1"
+               {{ 'checked' if s.in_fast }}></td>
+    <td><button class="danger" type="submit" formaction="/servers/own/{{ loop.index0 }}/delete"
+        formnovalidate onclick="return confirm('Удалить сервер «{{ s.name }}»?')"
+        style="padding:5px 12px;font-size:12px">удалить</button></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="sub">Своих серверов нет — политика «свой» пойдёт через группу скорости.</p>
+{% endif %}
+
+<h2>Подписки
+  <span class="pick" onclick="document.getElementById('rf').click()">обновить сейчас</span></h2>
+{% if cfg.subscriptions %}
+<table class="list">
+  <tr><th>Название</th><th>Серверов</th><th>Обновлена</th><th>Вкл</th>
+      <th>в «быстрый»</th><th>в «свой»</th><th>ID устройства</th><th></th></tr>
+  {% for s in cfg.subscriptions %}
+  <tr>
+    <td><input type="text" name="sub.{{ s.id }}.name" value="{{ s.name }}"
+               style="max-width:180px"><br>
+        <span class="muted" style="font-size:11px">{{ s.url[:46] }}{% if s.url|length > 46 %}…{% endif %}</span>
+        {% if s.last_notice %}<br><span class="bad" style="font-size:11px">{{ s.last_notice }}</span>{% endif %}</td>
+    <td>{{ s.last_count }}</td>
+    <td class="muted">{{ s.last_refresh[:16].replace('T', ' ') or "—" }}</td>
+    <td><input type="checkbox" name="sub.{{ s.id }}.enabled" value="1"
+               {{ 'checked' if s.enabled }}></td>
+    <td><input type="checkbox" name="sub.{{ s.id }}.in_fast" value="1"
+               {{ 'checked' if s.in_fast }}></td>
+    <td><input type="checkbox" name="sub.{{ s.id }}.in_own" value="1"
+               {{ 'checked' if s.in_own }}></td>
+    <td><input type="text" name="sub.{{ s.id }}.hwid" value="{{ s.hwid }}"
+               style="max-width:160px;font-size:11px"></td>
+    <td><button class="danger" type="submit" formaction="/servers/sub/{{ s.id }}/delete"
+        formnovalidate onclick="return confirm('Удалить подписку «{{ s.name }}»?')"
+        style="padding:5px 12px;font-size:12px">удалить</button></td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="hint">«ID устройства» подписка использует для учёта лимита. Если
+провайдер пишет, что лимит исчерпан, — впишите сюда идентификатор уже
+зарегистрированного устройства.</p>
+{% else %}
+<p class="sub">Подписок нет.</p>
+{% endif %}
+
+{% if cfg.manual_nodes %}
+<h2>Отдельные ссылки</h2>
+<table class="list">
+  {% for link in cfg.manual_nodes %}
+  <tr><td><code>{{ link[:70] }}{% if link|length > 70 %}…{% endif %}</code></td>
+      <td><button class="danger" type="submit" formaction="/servers/manual/{{ loop.index0 }}/delete"
+          formnovalidate style="padding:5px 12px;font-size:12px">удалить</button></td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h2>Балансировка</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(400px,1fr))">
+  {{ balancer('own', cfg.balancing.own, 'Группа «свой»',
+     'Личное: почта, нейросети, банки. Обычно только ваши серверы.',
+     own_tags + backup_tags) }}
+  {{ balancer('fast', cfg.balancing.fast, 'Группа «быстрый»',
+     'Скорость: видео, музыка, игры. Обычно серверы подписок.',
+     own_tags + backup_tags) }}
+</div>
+
+<div style="margin-top:20px" class="row">
+  <button type="submit">Применить</button>
+  <button id="rf" type="submit" formaction="/servers/refresh" formnovalidate
+          class="ghost">Обновить списки серверов</button>
+  <span class="hint">В резерве сейчас: {{ backups|length }}</span>
+</div>
+</form>
+{% endblock %}

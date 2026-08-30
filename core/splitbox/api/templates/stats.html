@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+{% set fmt = human_bytes %}
+<div class="bar"><div class="row">
+  <div class="status">
+    <span>за период: <b>{{ fmt(totals.total) }}</b></span>
+    <span>принято: <b class="ok">{{ fmt(totals.down) }}</b></span>
+    <span>отдано: <b>{{ fmt(totals.up) }}</b></span>
+  </div>
+  <span class="hint">период:</span>
+  {% for h, lbl in [(1,'час'), (24,'сутки'), (168,'неделя'), (720,'месяц')] %}
+  <a class="btn ghost {{ 'active' if hours == h }}" style="padding:7px 14px;font-size:13px"
+     href="/stats?hours={{ h }}{% if peer %}&peer={{ peer }}{% endif %}">{{ lbl }}</a>
+  {% endfor %}
+</div></div>
+
+<div class="card wide" style="padding:14px 16px">
+  <div class="nm">Нагрузка</div>
+  {{ chart|safe }}
+</div>
+
+<div class="grid" style="margin-top:12px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">
+  <div class="card">
+    <div class="nm">Куда уходит трафик</div>
+    <div style="display:flex;gap:16px;align-items:center;margin-top:8px">
+      {{ donut|safe }}
+      <div style="flex:1">
+        {% for d in directions %}
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;
+                background:{{ direction_color[d.direction] }};margin-right:7px"></span>
+            {{ direction_label[d.direction] }}</span>
+          <b>{{ fmt(d.total) }}</b>
+        </div>
+        {% else %}
+        <div class="hint">Пока нет данных</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px">«Напрямую» — трафик, который
+    не заворачивался в туннель: российские сайты и всё, что не в списках.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">Устройства</div>
+    {% for p in peers %}
+    <div style="margin-top:9px">
+      <div class="row" style="justify-content:space-between">
+        <span>{{ p.peer }}</span><b>{{ fmt(p.total) }}</b>
+      </div>
+      <div style="height:6px;background:#23282f;border-radius:3px;margin-top:4px">
+        <div style="height:6px;border-radius:3px;background:#f97316;
+             width:{{ (100 * p.total / peers[0].total)|round(1) if peers[0].total else 0 }}%"></div>
+      </div>
+    </div>
+    {% else %}
+    <div class="hint" style="margin-top:8px">Пока нет данных</div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="nm">Через какие серверы</div>
+    {% for o in outbounds %}
+    <div style="margin-top:9px">
+      <div class="row" style="justify-content:space-between">
+        <span><code>{{ o.outbound }}</code>
+          <span class="tag">{{ direction_label[o.direction] }}</span></span>
+        <b>{{ fmt(o.total) }}</b>
+      </div>
+      <div style="height:6px;background:#23282f;border-radius:3px;margin-top:4px">
+        <div style="height:6px;border-radius:3px;
+             background:{{ direction_color[o.direction] }};
+             width:{{ (100 * o.total / outbounds[0].total)|round(1) if outbounds[0].total else 0 }}%"></div>
+      </div>
+    </div>
+    {% else %}
+    <div class="hint" style="margin-top:8px">Пока нет данных</div>
+    {% endfor %}
+  </div>
+</div>
+
+<h2>Куда ходили
+  {% if known_peers %}
+  <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">
+    {% if peer %}<a href="/stats?hours={{ hours }}" style="color:#f97316">все устройства</a>{% else %}все устройства{% endif %}
+    {% for p in known_peers %}
+    · {% if peer == p %}<b>{{ p }}</b>{% else %}<a href="/stats?hours={{ hours }}&peer={{ p }}"
+       style="color:#8b98a5">{{ p }}</a>{% endif %}
+    {% endfor %}
+  </span>
+  {% endif %}
+</h2>
+{% if hosts %}
+<table class="list">
+  <tr><th>Сайт</th><th>Устройство</th><th>Принято</th><th>Отдано</th></tr>
+  {% for h in hosts %}
+  <tr><td>{{ h.host }}</td><td class="muted">{{ h.peer }}</td>
+      <td>{{ fmt(h.down) }}</td><td class="muted">{{ fmt(h.up) }}</td></tr>
+  {% endfor %}
+</table>
+{% elif not cfg.stats.track_hosts %}
+<p class="sub">Запись посещений выключена в настройках.</p>
+{% else %}
+<p class="sub">Пока нет данных — они появятся, когда через коробку пойдёт трафик.</p>
+{% endif %}
+{% endblock %}

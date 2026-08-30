@@ -5,8 +5,10 @@ ARG SINGBOX_VERSION=v1.12.14
 FROM ghcr.io/sagernet/sing-box:${SINGBOX_VERSION} AS singbox
 
 FROM python:3.13-slim
+# tzdata — для подписей времени на графиках: zoneinfo без системной базы
+# часовых поясов не находит даже Europe/Moscow.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates \
+        curl ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=singbox /usr/local/bin/sing-box /usr/local/bin/sing-box
 

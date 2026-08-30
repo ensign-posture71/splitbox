@@ -13,5 +13,6 @@ RENDERED = STATE / "rendered"
 SINGBOX_LIVE = RENDERED / "singbox.json"
 SINGBOX_NEW = RENDERED / "singbox.json.new"
 BACKUPS = RENDERED / "backup-outbounds.json"     # кэш refresh'а подписок
+STATS_DB = STATE / "stats.db"     # статистика трафика (SQLite)
 RUN = STATE / "run"
 SUPERVISOR_SOCK = RUN / "gateway.sock"

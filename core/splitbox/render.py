@@ -15,7 +15,8 @@ import re
 from importlib import resources
 
 from . import catalog, subs
-from .model import Config, Mode, Policy
+from .subs import strip_meta
+from .model import Config, Mode, Policy, Strategy
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
 
@@ -170,13 +171,50 @@ def _rewrite_outbound(rules: list[dict], src: str, dst: str) -> None:
             rule["outbound"] = dst
 
 
+def _group(tag: str, members: list[dict], bal) -> dict:
+    """Группа серверов по выбранной стратегии.
+
+    latency — urltest: sing-box сам меряет задержку и берёт лучший.
+    pinned  — selector с фиксированным выбором: всегда один и тот же сервер
+              (пока он жив), удобно, когда важна предсказуемость выхода.
+    """
+    tags = [m["tag"] for m in members]
+    if bal.strategy is Strategy.pinned:
+        default = bal.pinned_tag if bal.pinned_tag in tags else tags[0]
+        return {"type": "selector", "tag": tag, "outbounds": tags,
+                "default": default}
+    return {
+        "type": "urltest",
+        "tag": tag,
+        "outbounds": tags,
+        "url": "https://www.gstatic.com/generate_204",
+        "interval": bal.interval,
+        "tolerance": bal.tolerance,
+        "idle_timeout": bal.idle_timeout,
+    }
+
+
+def _backup_groups(ob: dict) -> list[str]:
+    """В какие группы просится резервный сервер.
+
+    Отсутствие поля и пустой список — разные вещи: кэш, записанный старой
+    версией, поля не имеет (такие серверы считаем «быстрыми»), а пустой
+    список означает «владелец исключил эту подписку отовсюду».
+    """
+    groups = ob.get("_groups")
+    return ["fast"] if groups is None else list(groups)
+
+
 def render_config(cfg: Config, backups: list[dict] | None = None) -> dict:
     """Модель + резервные outbound'ы (кэш refresh'а подписок) -> конфиг.
 
-    Деградации без падений (fail-open и здесь):
-      * нет подписок — правила fast указывают на own-out;
-      * нет своих серверов — правила own указывают на fast-out;
-      * нет ни того ни другого — RenderError: маршрутизировать некуда.
+    Состав каждой группы задаётся флагами участия: у своих серверов —
+    in_own/in_fast, у подписок — in_fast/in_own (последний по умолчанию
+    выключен: чужой сервер видит весь проходящий трафик).
+
+    Деградации вместо отказов:
+      * группа пуста — её правила переписываются на соседнюю;
+      * пусты обе — RenderError: маршрутизировать некуда.
     """
     backups = list(backups or [])
     env = _services_env(cfg)
@@ -195,51 +233,46 @@ def render_config(cfg: Config, backups: list[dict] | None = None) -> dict:
     config["endpoints"] = [_wireguard_endpoint(cfg)]
 
     own = _own_outbounds(cfg)
+    servers = cfg.enabled_own()
     if not own and not backups:
         raise RenderError("нет ни одного сервера: добавьте свой сервер "
                           "или подписку")
+
     config["outbounds"].extend(own)
-    config["outbounds"].extend(backups)
+    config["outbounds"].extend(strip_meta(o) for o in backups)
+
+    # Состав групп по флагам участия.
+    members = {
+        "own": [o for o, s in zip(own, servers) if s.in_own]
+               + [o for o in backups if "own" in _backup_groups(o)],
+        "fast": [o for o, s in zip(own, servers) if s.in_fast]
+                + [o for o in backups if "fast" in _backup_groups(o)],
+    }
+    if not members["own"] and not members["fast"]:
+        raise RenderError("ни один сервер не включён ни в одну группу — "
+                          "отметьте участие серверов в разделе «Серверы»")
 
     rules = config["route"]["rules"]
+    balancers = {"own": cfg.balancing.own, "fast": cfg.balancing.fast}
+    resolved: dict[str, str] = {}
 
-    # own-out: один свой сервер — просто его тег; несколько — группа
-    # автовыбора только из своих (все они доверенные).
-    if len(own) == 1:
-        _rewrite_outbound(rules, "own-out", own[0]["tag"])
-        own_tag = own[0]["tag"]
-    elif own:
-        config["outbounds"].append({
-            "type": "urltest",
-            "tag": "own-out",
-            "outbounds": [o["tag"] for o in own],
-            "url": "https://www.gstatic.com/generate_204",
-            "interval": "5m",
-            "tolerance": 60,
-            "idle_timeout": "30m",
-        })
-        own_tag = "own-out"
-    else:
-        # Своих серверов нет — «own» честно деградирует в общий пул.
-        own_tag = "fast-out"
-        _rewrite_outbound(rules, "own-out", "fast-out")
+    for name in ("own", "fast"):
+        group = members[name]
+        if not group:
+            continue
+        if len(group) == 1:
+            # Один участник — группа не нужна, правило указывает прямо
+            # на сервер: меньше сущностей в конфиге и в логах.
+            resolved[name] = group[0]["tag"]
+        else:
+            resolved[name] = f"{name}-out"
+            config["outbounds"].append(
+                _group(f"{name}-out", group, balancers[name]))
 
-    # fast-out: свои серверы наравне с резервными — если свой быстрее,
-    # трафик остаётся на нём (донорское решение).
-    if backups:
-        config["outbounds"].append({
-            "type": "urltest",
-            "tag": "fast-out",
-            "outbounds": [o["tag"] for o in own] + [o["tag"] for o in backups],
-            "url": "https://www.gstatic.com/generate_204",
-            "interval": "5m",
-            "tolerance": 60,
-            "idle_timeout": "30m",
-        })
-    else:
-        # Без подписок группы нет — правила fast должны указывать на свой
-        # сервер, иначе конфиг ссылался бы на несуществующий outbound.
-        _rewrite_outbound(rules, "fast-out", own_tag)
+    # Пустая группа честно деградирует в соседнюю.
+    for name, other in (("own", "fast"), ("fast", "own")):
+        target = resolved.get(name) or resolved[other]
+        _rewrite_outbound(rules, f"{name}-out", target)
 
     if rule_sets:
         config["route"]["rule_set"] = rule_sets
