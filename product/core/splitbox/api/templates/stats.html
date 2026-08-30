@@ -1,6 +1,103 @@
 {% extends "base.html" %}
+{% macro metric(title, value, unit, sub, right_label, right_value, spark) %}
+<div class="card metric">
+  <div class="mt">{{ title }}</div>
+  <div class="mv">{{ value }}<span class="mu">{{ unit }}</span></div>
+  <div class="ms">{{ sub }}</div>
+  <div class="mr"><span>{{ right_label }}</span><span>{{ right_value }}</span></div>
+  <div class="mspark">{{ spark|safe }}</div>
+</div>
+{% endmacro %}
 {% block content %}
 {% set fmt = human_bytes %}
+
+<div class="grid metrics">
+  {{ metric('ЦП', '%.1f'|format(sys.cpu), '%',
+     '%d ядер%s'|format(sys.cpu_info.cores,
+       (' / %.2f ГГц'|format(sys.cpu_info.mhz / 1000)) if sys.cpu_info.mhz else ''),
+     'среднее %.0f%% · пик %.0f%%'|format(sys.cpu_stat.avg, sys.cpu_stat.peak),
+     '', spark.cpu) }}
+
+  {{ metric('ПАМЯТЬ',
+     '%.1f'|format(100 * sys.mem_used / sys.mem_total if sys.mem_total else 0), '%',
+     '%s / %s'|format(fmt(sys.mem_used), fmt(sys.mem_total)),
+     'пик %s'|format(fmt(sys.mem_stat.peak)), '', spark.mem) }}
+
+  {{ metric('ПОДКАЧКА',
+     '%.1f'|format(100 * sys.swap_used / sys.swap_total if sys.swap_total else 0), '%',
+     '%s / %s'|format(fmt(sys.swap_used), fmt(sys.swap_total)),
+     'пик %s'|format(fmt(sys.swap_stat.peak)), '', spark.swap) }}
+
+  {{ metric('ДИСК',
+     '%.1f'|format(100 * sys.disk_used / sys.disk_total if sys.disk_total else 0), '%',
+     '%s / %s'|format(fmt(sys.disk_used), fmt(sys.disk_total)),
+     'свободно %s'|format(fmt(sys.disk_free)), '', spark.disk) }}
+</div>
+
+<div class="grid" style="grid-template-columns:2.2fr 1fr;margin-top:12px">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:baseline">
+      <div>
+        <div class="mt">СКОРОСТЬ СЕТИ</div>
+        <div class="ms">всего по интерфейсам машины</div>
+      </div>
+      <div class="hint">
+        <span style="color:#f97316">↓ {{ fmt(sys.net_rx_stat.peak) }}/с пик</span> ·
+        <span style="color:#7dd3fc">↑ {{ fmt(sys.net_tx_stat.peak) }}/с пик</span>
+      </div>
+    </div>
+    {{ spark.net|safe }}
+    <div class="row" style="justify-content:space-between;margin-top:8px">
+      <span class="hint">принято за период <b>{{ fmt(totals.down) }}</b></span>
+      <span class="hint">отдано <b>{{ fmt(totals.up) }}</b></span>
+      <span class="hint">в среднем ↓ {{ fmt(sys.net_rx_stat.avg) }}/с
+        ↑ {{ fmt(sys.net_tx_stat.avg) }}/с</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="mt">СОЕДИНЕНИЯ</div>
+    <div class="mv" style="font-size:26px">{{ sys.total }}<span class="mu">открытых сокетов</span></div>
+    <div class="row" style="gap:16px;margin-top:2px">
+      <span class="hint">TCP <b>{{ sys.tcp }}</b></span>
+      <span class="hint">UDP <b>{{ sys.udp }}</b></span>
+    </div>
+    <div class="mspark">{{ spark.sockets|safe }}</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:12px">
+  <div class="card">
+    <div class="mt">ВРЕМЯ РАБОТЫ</div>
+    <div class="row" style="gap:24px;margin-top:6px">
+      <span><span class="hint">машина</span><br><b>{{ human_uptime(sys.uptime) }}</b></span>
+      <span><span class="hint">панель</span><br><b>{{ fmt(sys.process.rss) }}
+        · {{ sys.process.threads }} потоков</b></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="mt">АДРЕСА КОРОБКИ</div>
+    <div style="margin-top:6px">
+      {% for a in sys.addresses %}<code>{{ a }}</code><br>{% else %}
+      <span class="hint">не определены</span>{% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="mt">БЛОКИРОВКА РЕКЛАМЫ</div>
+    {% if adguard %}
+    <div class="row" style="gap:20px;margin-top:6px">
+      <span><span class="hint">запросов</span><br>
+        <b>{{ (adguard_counters.num_dns_queries if adguard_counters else 0) }}</b></span>
+      <span><span class="hint">заблокировано</span><br>
+        <b class="ok">{{ (adguard_counters.num_blocked_filtering if adguard_counters else 0) }}</b></span>
+    </div>
+    <a class="btn ghost" style="margin-top:10px;padding:7px 14px;font-size:13px"
+       href="{{ adguard_url }}" target="_blank" rel="noopener">Открыть AdGuard</a>
+    {% else %}
+    <div class="hint" style="margin-top:6px">AdGuard не отвечает</div>
+    {% endif %}
+  </div>
+</div>
+
 <div class="bar"><div class="row">
   <div class="status">
     <span>за период: <b>{{ fmt(totals.total) }}</b></span>

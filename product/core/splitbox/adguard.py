@@ -25,11 +25,23 @@ API = "http://127.0.0.1:3000"
 SCHEMA_VERSION = 20
 
 
+def make_password(plain: str) -> str:
+    """AdGuard принимает только bcrypt — другого формата он не понимает."""
+    import bcrypt
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+
+
 def default_config(cfg: Config) -> dict:
+    users = ([{"name": cfg.adguard.username,
+               "password": cfg.adguard.password_bcrypt}]
+             if cfg.adguard.password_bcrypt else [])
     return {
         "schema_version": SCHEMA_VERSION,
-        "http": {"address": "127.0.0.1:3000"},
-        "users": [],
+        # Слушает все адреса внутри сетевого пространства стека. В домашнем
+        # режиме это адрес машины в локальной сети, в режиме VPS порт наружу
+        # не публикуется — туда попадают только через WireGuard.
+        "http": {"address": f"0.0.0.0:{cfg.adguard.port}"},
+        "users": users,
         "dns": {
             "bind_hosts": ["0.0.0.0"],
             "port": 53,
@@ -50,15 +62,27 @@ def default_config(cfg: Config) -> dict:
     }
 
 
-def set_protection(enabled: bool, timeout: int = 5) -> bool:
+def _auth_header(cfg: Config | None) -> dict[str, str]:
+    """AdGuard теперь за паролем — API тоже требует Basic-авторизацию."""
+    if not cfg or not cfg.adguard.password_plain:
+        return {}
+    import base64
+    raw = f"{cfg.adguard.username}:{cfg.adguard.password_plain}".encode()
+    return {"Authorization": "Basic " + base64.b64encode(raw).decode()}
+
+
+def set_protection(enabled: bool, cfg: Config | None = None,
+                   timeout: int = 5) -> bool:
     """Тумблер защиты через API AdGuard (без auth: users пуст, слушает
     только localhost внутри netns стека). False = AdGuard не ответил —
     не ошибка страницы: настройка сохранена в config.yaml и применится
     к bootstrap'у при пересоздании."""
+    headers = {"Content-Type": "application/json"}
+    headers.update(_auth_header(cfg))
     req = urllib.request.Request(
         f"{API}/control/protection",
         data=json.dumps({"enabled": enabled}).encode(),
-        headers={"Content-Type": "application/json"}, method="POST")
+        headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status == 200
@@ -66,14 +90,60 @@ def set_protection(enabled: bool, timeout: int = 5) -> bool:
         return False
 
 
-def protection_enabled(timeout: int = 5) -> bool | None:
-    """None = AdGuard не отвечает."""
+def status(cfg: Config | None = None, timeout: int = 5) -> dict | None:
+    """Состояние AdGuard или None, если он не отвечает."""
+    req = urllib.request.Request(f"{API}/control/status",
+                                 headers=_auth_header(cfg))
     try:
-        with urllib.request.urlopen(f"{API}/control/status",
-                                    timeout=timeout) as resp:
-            return bool(json.load(resp).get("protection_enabled"))
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
     except (OSError, ValueError):
         return None
+
+
+def counters(cfg: Config | None = None, timeout: int = 5) -> dict | None:
+    """Счётчики фильтрации: сколько запросов и сколько из них заблокировано."""
+    req = urllib.request.Request(f"{API}/control/stats",
+                                 headers=_auth_header(cfg))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except (OSError, ValueError):
+        return None
+
+
+def ensure_access(cfg: Config, conf_dir: Path) -> bool:
+    """Привести доступ к интерфейсу в соответствие с настройками коробки.
+
+    Нужна для уже работающих установок: их AdGuardHome.yaml создан прошлой
+    версией — слушает только localhost и пускает без пароля. Просто
+    пересоздать файл нельзя (AdGuard хранит там свои списки и настройки),
+    поэтому правим ровно два поля.
+    """
+    path = conf_dir / "AdGuardHome.yaml"
+    if not path.exists() or not cfg.adguard.password_bcrypt:
+        return False
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except yaml.YAMLError:
+        return False
+
+    want_addr = f"0.0.0.0:{cfg.adguard.port}"
+    changed = False
+    http = data.setdefault("http", {})
+    if http.get("address") != want_addr:
+        http["address"] = want_addr
+        changed = True
+    if not data.get("users"):
+        data["users"] = [{"name": cfg.adguard.username,
+                          "password": cfg.adguard.password_bcrypt}]
+        changed = True
+    if changed:
+        tmp = path.with_suffix(".yaml.tmp")
+        with open(tmp, "w") as fh:
+            yaml.safe_dump(data, fh, sort_keys=False)
+        tmp.replace(path)
+    return changed
 
 
 def write_if_missing(cfg: Config, conf_dir: Path) -> bool:

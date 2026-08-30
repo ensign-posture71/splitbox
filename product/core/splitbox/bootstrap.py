@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import os
 
-from . import adguard, paths, store
+import secrets
+
+from . import adguard, paths, store, tls
 from .model import Mode
 
 
@@ -27,7 +29,23 @@ def main() -> None:
         cfg.mode = mode
         store.save(cfg, paths.CONFIG)
 
-    created = adguard.write_if_missing(cfg, paths.STATE / "adguard" / "conf")
+    # Учётка AdGuard: его интерфейс управляет DNS всей сети, и оставлять
+    # его без пароля, раз он слушает не только localhost, нельзя.
+    if not cfg.adguard.password_bcrypt:
+        plain = secrets.token_urlsafe(12)
+        cfg.adguard.password_plain = plain
+        cfg.adguard.password_bcrypt = adguard.make_password(plain)
+        store.save(cfg, paths.CONFIG)
+        print("[bootstrap] создана учётка AdGuard (пароль показан в панели)")
+
+    tls.ensure_cert(paths.STATE / "tls",
+                    [cfg.endpoint_host] if cfg.endpoint_host else [])
+
+    conf_dir = paths.STATE / "adguard" / "conf"
+    created = adguard.write_if_missing(cfg, conf_dir)
+    if not created and adguard.ensure_access(cfg, conf_dir):
+        print("[bootstrap] доступ к AdGuard приведён к настройкам "
+              "(адрес и пароль)")
     print(f"[bootstrap] state готов; AdGuardHome.yaml "
           f"{'создан' if created else 'уже был'}")
 

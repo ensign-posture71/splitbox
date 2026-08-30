@@ -31,6 +31,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import sysstats
+
 log = logging.getLogger("splitbox.stats")
 
 CLASH = "http://127.0.0.1:9090/connections"
@@ -51,6 +53,15 @@ CREATE TABLE IF NOT EXISTS hosts(
   ts INTEGER NOT NULL, peer TEXT NOT NULL, host TEXT NOT NULL,
   up INTEGER NOT NULL DEFAULT 0, down INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(ts, peer, host)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS system(
+  ts INTEGER PRIMARY KEY,
+  cpu REAL NOT NULL DEFAULT 0,
+  mem_used INTEGER NOT NULL DEFAULT 0, mem_total INTEGER NOT NULL DEFAULT 0,
+  swap_used INTEGER NOT NULL DEFAULT 0, swap_total INTEGER NOT NULL DEFAULT 0,
+  disk_used INTEGER NOT NULL DEFAULT 0, disk_total INTEGER NOT NULL DEFAULT 0,
+  net_rx INTEGER NOT NULL DEFAULT 0, net_tx INTEGER NOT NULL DEFAULT 0,
+  tcp INTEGER NOT NULL DEFAULT 0, udp INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
 """
 
 
@@ -101,6 +112,8 @@ class Collector(threading.Thread):
         self.seen: dict[str, tuple[int, int]] = {}
         self._stop = threading.Event()
         self._last_cleanup = 0.0
+        self._sys = sysstats.SysCollector()
+        self._last_sys = 0.0
 
     def stop(self) -> None:
         self._stop.set()
@@ -171,6 +184,7 @@ class Collector(threading.Thread):
             edge = int(now - keep_days * 86400)
             conn.execute("DELETE FROM traffic_hourly WHERE ts < ?", (edge,))
             conn.execute("DELETE FROM hosts WHERE ts < ?", (edge,))
+            conn.execute("DELETE FROM system WHERE ts < ?", (edge,))
 
     def run(self) -> None:
         conn = connect(self.db_path)
@@ -181,6 +195,11 @@ class Collector(threading.Thread):
                     now = time.time()
                     try:
                         self.store(conn, self.poll_once(), now, st.track_hosts)
+                        # Системный срез — раз в минуту: чаще незачем,
+                        # он и хранится с минутной гранулярностью.
+                        if now - self._last_sys >= 60:
+                            self._sys.store(conn, self._sys.snapshot(now))
+                            self._last_sys = now
                         if now - self._last_cleanup > 3600:
                             self.cleanup(conn, now, st.keep_days)
                             self._last_cleanup = now

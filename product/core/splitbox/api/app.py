@@ -27,10 +27,10 @@ from pathlib import Path
 
 from .. import adguard as adguard_mod
 from .. import apply as apply_mod
-from .. import catalog, charts, health, paths, stats, subs, wg
+from .. import catalog, charts, health, paths, stats, subs, sysstats, wg
 from .. import render as render_mod
 from ..model import (Balancer, Config, DomainRule, Mode, NetworkRule,
-                     OwnServer, Policy, Strategy, Subscription)
+                     OwnServer, Policy, Strategy, Subscription, WorkMode)
 from . import auth, state
 
 log = logging.getLogger("splitbox.api")
@@ -42,6 +42,8 @@ templates = Jinja2Templates(directory=str(BASE / "templates"))
 templates.env.globals["human_bytes"] = stats.human_bytes
 templates.env.globals["direction_label"] = charts.DIRECTION_LABEL
 templates.env.globals["direction_color"] = charts.DIRECTION_COLOR
+templates.env.globals["human_uptime"] = sysstats.human_uptime
+templates.env.globals["sparkline"] = charts.sparkline
 limiter = auth.LoginLimiter()
 
 app = FastAPI(title="splitbox", docs_url=None, redoc_url=None, openapi_url=None)
@@ -64,7 +66,19 @@ def _guard(request: Request, cfg: Config) -> RedirectResponse | None:
     return None
 
 
+def _adguard_url(request: Request, cfg: Config) -> str:
+    """Адрес интерфейса AdGuard — тот же хост, что и у панели, свой порт.
+
+    По http, а не https: AdGuard выпускает сертификат только если ему явно
+    его дать, и подсовывать https-ссылку на слушающий http порт значило бы
+    отправлять человека на страницу ошибки.
+    """
+    host = request.url.hostname or "127.0.0.1"
+    return f"http://{host}:{cfg.adguard.port}"
+
+
 def _page(request: Request, name: str, cfg: Config, **ctx) -> HTMLResponse:
+    ctx.setdefault("adguard_url", _adguard_url(request, cfg))
     ctx.setdefault("msg", request.query_params.get("msg", ""))
     ctx.setdefault("err", request.query_params.get("err", ""))
     ctx["mode"] = cfg.mode.value
@@ -164,6 +178,17 @@ def _no_servers_error() -> str:
 
 # --- Онбординг ---------------------------------------------------------------
 
+SETUP_STEPS = 7
+
+
+def _guess_external(request: Request) -> str:
+    """Подсказка для поля внешнего адреса: то, через что человек сейчас
+    открыл панель. Часто это и есть нужный адрес, но не всегда — поэтому
+    подставляем как подсказку, а не молча."""
+    host = request.url.hostname or ""
+    return "" if host in ("localhost", "127.0.0.1") else host
+
+
 def _setup_gate(request: Request) -> HTMLResponse | None:
     """До установки пароля вебка на VPS торчит в интернет — окно, в которое
     пароль мог бы поставить кто угодно. Инсталлер генерирует одноразовый
@@ -193,11 +218,11 @@ def setup_page(request: Request):
     step = int(request.query_params.get("step", "1"))
     if cfg.admin.password_hash and step == 1:
         step = 2
-    ctx: dict = {"step": step}
-    if step == 4:
-        peer = cfg.wireguard.peers[-1] if cfg.wireguard.peers else None
-        ctx["peer"] = peer
-    if step == 5:
+    ctx: dict = {"step": step, "steps_total": SETUP_STEPS,
+                 "guessed_host": _guess_external(request)}
+    if step == 6:
+        ctx["peer"] = cfg.wireguard.peers[-1] if cfg.wireguard.peers else None
+    if step == 7:
         ctx["tunnel"] = health.probe_tunnel()
     resp = _page(request, "setup.html", cfg, **ctx)
     token = request.query_params.get("token", "")
@@ -230,6 +255,32 @@ def setup_password(request: Request, password: str = Form(...),
     return resp
 
 
+@app.post("/setup/mode")
+def setup_mode(request: Request, work_mode: str = Form(...)):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    try:
+        mode = WorkMode(work_mode)
+    except ValueError:
+        return _redirect("/setup?step=2", err="Выберите режим работы")
+    state.update(lambda c: setattr(c, "work_mode", mode))
+    # В режиме «только локальная сеть» внешний адрес не нужен — шаг пропускаем.
+    return _redirect("/setup?step=3" if mode is WorkMode.full
+                     else "/setup?step=4")
+
+
+@app.post("/setup/external")
+def setup_external(request: Request, endpoint_host: str = Form("")):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    host = endpoint_host.strip()
+    if host:
+        state.update(lambda c: setattr(c, "endpoint_host", host))
+    return _redirect("/setup?step=4")
+
+
 @app.post("/setup/source")
 def setup_source(request: Request, link: str = Form(...)):
     cfg = state.get()
@@ -237,7 +288,7 @@ def setup_source(request: Request, link: str = Form(...)):
         return guard
     link = link.strip()
     if not link:
-        return _redirect("/setup?step=2", err="Вставьте ссылку")
+        return _redirect("/setup?step=4", err="Вставьте ссылку")
 
     def put(c: Config):
         # Пресет политик — при первом источнике, чтобы «просто заработало».
@@ -268,18 +319,18 @@ def setup_source(request: Request, link: str = Form(...)):
     try:
         cfg = state.update(put)
     except ValueError as exc:
-        return _redirect("/setup?step=2", err=str(exc))
+        return _redirect("/setup?step=4", err=str(exc))
 
     n = 0
     if cfg.subscriptions:
         n = len(_collect_backups())
         cfg = state.get()          # _collect_backups обновил last_count
         if n == 0:
-            return _redirect("/setup?step=2", err=_no_servers_error())
+            return _redirect("/setup?step=4", err=_no_servers_error())
     msg, err = _try_apply(cfg)
     if err:
-        return _redirect("/setup?step=2", err=err)
-    return _redirect("/setup?step=3",
+        return _redirect("/setup?step=4", err=err)
+    return _redirect("/setup?step=5",
                      msg=f"Найдено серверов: {n}" if n else "Сервер добавлен")
 
 
@@ -295,7 +346,7 @@ def setup_device(request: Request, name: str = Form(...)):
         wg.new_peer(c, name)
     cfg = state.update(put)
     msg, err = _try_apply(cfg)
-    return _redirect("/setup?step=4", err=err)
+    return _redirect("/setup?step=6", err=err)
 
 
 # --- Вход --------------------------------------------------------------------
@@ -665,6 +716,7 @@ async def settings_save(request: Request):
             return _redirect("/settings", err="Пароли не совпадают")
 
     def put(c: Config):
+        c.work_mode = WorkMode(form.get("work_mode") or c.work_mode.value)
         c.endpoint_host = (form.get("endpoint_host") or "").strip()
         c.timezone = (form.get("timezone") or "UTC").strip()
         c.dns.adblock = form.get("adblock") == "1"
@@ -792,6 +844,20 @@ def stats_page(request: Request):
                                        cfg.timezone),
             "donut": charts.donut(stats.by_direction(conn, hours)),
             "known_peers": stats.known_peers(conn, hours),
+            "sys": sysstats.summary(conn, hours),
+            "adguard": adguard_mod.status(cfg),
+            "adguard_counters": adguard_mod.counters(cfg),
+        }
+        h = ctx["sys"]["history"]
+        ctx["spark"] = {
+            "cpu": charts.sparkline([r["cpu"] for r in h], "#38bdf8"),
+            "mem": charts.sparkline([r["mem_used"] for r in h], "#818cf8"),
+            "swap": charts.sparkline([r["swap_used"] for r in h], "#a78bfa"),
+            "disk": charts.sparkline([r["disk_used"] for r in h], "#4ade80"),
+            "net": charts.dual_sparkline([r["net_rx"] for r in h],
+                                         [r["net_tx"] for r in h]),
+            "sockets": charts.sparkline([r["tcp"] + r["udp"] for r in h],
+                                        "#7dd3fc"),
         }
     finally:
         conn.close()
