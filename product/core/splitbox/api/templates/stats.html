@@ -143,7 +143,9 @@
     {% for p in peers %}
     <div style="margin-top:9px">
       <div class="row" style="justify-content:space-between">
-        <span>{{ p.peer }}</span><b>{{ fmt(p.total) }}</b>
+        <span>{% if p.name %}{{ p.name }}
+          <span class="muted" style="font-size:11px">{{ p.peer }}</span>
+          {% else %}{{ p.peer }}{% endif %}</span><b>{{ fmt(p.total) }}</b>
       </div>
       <div style="height:6px;background:#23282f;border-radius:3px;margin-top:4px">
         <div style="height:6px;border-radius:3px;background:#f97316;
@@ -181,8 +183,9 @@
   <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">
     {% if peer %}<a href="/stats?hours={{ hours }}" style="color:#f97316">все устройства</a>{% else %}все устройства{% endif %}
     {% for p in known_peers %}
-    · {% if peer == p %}<b>{{ p }}</b>{% else %}<a href="/stats?hours={{ hours }}&peer={{ p }}"
-       style="color:#8b98a5">{{ p }}</a>{% endif %}
+    · {% if peer == p %}<b>{{ peer_names.get(p, p) }}</b>{% else %}<a
+       href="/stats?hours={{ hours }}&peer={{ p }}"
+       style="color:#8b98a5">{{ peer_names.get(p, p) }}</a>{% endif %}
     {% endfor %}
   </span>
   {% endif %}
@@ -191,7 +194,7 @@
 <table class="list">
   <tr><th>Сайт</th><th>Устройство</th><th>Принято</th><th>Отдано</th></tr>
   {% for h in hosts %}
-  <tr><td>{{ h.host }}</td><td class="muted">{{ h.peer }}</td>
+  <tr><td>{{ h.host }}</td><td class="muted">{{ h.name or h.peer }}</td>
       <td>{{ fmt(h.down) }}</td><td class="muted">{{ fmt(h.up) }}</td></tr>
   {% endfor %}
 </table>
