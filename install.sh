@@ -114,7 +114,15 @@ else
     docker compose up -d --build
 fi
 
-IP=$(curl -fsS -4 --max-time 10 https://ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
+# Какой адрес показать — зависит от режима. В домашнем режиме коробку
+# ищут в локальной сети, и внешний адрес провайдера тут только сбивает
+# с толку; на VPS наоборот — локальный адрес бесполезен.
+if [ "$MODE_NOW" = "lan-gateway" ]; then
+    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+else
+    IP=$(curl -fsS -4 --max-time 10 https://ifconfig.me 2>/dev/null \
+         || hostname -I 2>/dev/null | awk '{print $1}')
+fi
 
 say ""
 say "Готово. Откройте мастер настройки:"
