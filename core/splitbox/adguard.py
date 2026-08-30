@@ -18,6 +18,9 @@ import yaml
 
 from .model import Config
 
+# API дёргаем по http на localhost внутри стека: наружу этот порт всё
+# равно только редиректит на https, а внутри лишний TLS ни от кого не
+# защищает и потребовал бы доверия к самоподписанному сертификату.
 API = "http://127.0.0.1:3000"
 
 # schema_version намеренно старый из проверенных: AdGuard мигрирует старую
@@ -31,7 +34,26 @@ def make_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
-def default_config(cfg: Config) -> dict:
+def tls_section(cfg: Config, cert: str, key: str) -> dict:
+    """HTTPS для интерфейса AdGuard тем же сертификатом, что у панели.
+
+    force_https означает, что http-порт только перенаправляет: ссылку
+    в панели можно давать сразу на https, и человек не окажется на
+    открытом соединении, даже если перейдёт по старому адресу.
+    """
+    return {
+        "enabled": True,
+        "server_name": "",
+        "force_https": True,
+        "port_https": cfg.adguard.port_https,
+        "port_dns_over_tls": 0,
+        "port_dns_over_quic": 0,
+        "certificate_path": cert,
+        "private_key_path": key,
+    }
+
+
+def default_config(cfg: Config, cert: str = "", key: str = "") -> dict:
     users = ([{"name": cfg.adguard.username,
                "password": cfg.adguard.password_bcrypt}]
              if cfg.adguard.password_bcrypt else [])
@@ -59,6 +81,7 @@ def default_config(cfg: Config) -> dict:
             "name": "AdGuard DNS filter",
             "id": 1,
         }],
+        **({"tls": tls_section(cfg, cert, key)} if cert and key else {}),
     }
 
 
@@ -112,7 +135,8 @@ def counters(cfg: Config | None = None, timeout: int = 5) -> dict | None:
         return None
 
 
-def ensure_access(cfg: Config, conf_dir: Path) -> bool:
+def ensure_access(cfg: Config, conf_dir: Path, cert: str = "",
+                  key: str = "") -> bool:
     """Привести доступ к интерфейсу в соответствие с настройками коробки.
 
     Нужна для уже работающих установок: их AdGuardHome.yaml создан прошлой
@@ -138,6 +162,9 @@ def ensure_access(cfg: Config, conf_dir: Path) -> bool:
         data["users"] = [{"name": cfg.adguard.username,
                           "password": cfg.adguard.password_bcrypt}]
         changed = True
+    if cert and key and not (data.get("tls") or {}).get("enabled"):
+        data["tls"] = tls_section(cfg, cert, key)
+        changed = True
     if changed:
         tmp = path.with_suffix(".yaml.tmp")
         with open(tmp, "w") as fh:
@@ -146,7 +173,8 @@ def ensure_access(cfg: Config, conf_dir: Path) -> bool:
     return changed
 
 
-def write_if_missing(cfg: Config, conf_dir: Path) -> bool:
+def write_if_missing(cfg: Config, conf_dir: Path, cert: str = "",
+                     key: str = "") -> bool:
     """True — файл создан; False — уже был (AdGuard им владеет, не трогаем)."""
     path = conf_dir / "AdGuardHome.yaml"
     if path.exists():
@@ -154,6 +182,6 @@ def write_if_missing(cfg: Config, conf_dir: Path) -> bool:
     conf_dir.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".yaml.tmp")
     with open(tmp, "w") as fh:
-        yaml.safe_dump(default_config(cfg), fh, sort_keys=False)
+        yaml.safe_dump(default_config(cfg, cert, key), fh, sort_keys=False)
     tmp.replace(path)
     return True

@@ -323,5 +323,35 @@ def test_work_mode_changeable_in_settings(client):
 def test_adguard_link_present(client):
     _onboard(client)
     html = client.get("/settings").text
-    assert ":3000" in html            # ссылка на интерфейс AdGuard
+    assert ":3443" in html           # ссылка на интерфейс AdGuard (https)
+    assert "https://" in html
     assert "admin" in html            # логин показан
+
+
+def test_connect_page_has_instructions(client):
+    """Инструкция «что делать дальше» — обязательная часть продукта:
+    без неё коробка стоит и ничего не делает."""
+    _onboard(client)
+    r = client.get("/connect")
+    assert r.status_code == 200
+    for must in ("Проверьте на одном устройстве", "DHCP", "MikroTik",
+                 "Если что-то пошло не так", "Windows", "Android"):
+        assert must in r.text, must
+
+
+def test_connect_shows_port_forward_only_in_full_mode(client):
+    _onboard(client)
+    assert "Проброс портов" not in client.get("/connect").text
+    from splitbox.api import state
+    from splitbox.model import WorkMode
+    state.update(lambda c: setattr(c, "work_mode", WorkMode.full))
+    assert "Проброс портов" in client.get("/connect").text
+
+
+def test_setup_ends_with_connect_step(client):
+    """Мастер не должен заканчиваться на «всё работает»: трафик в коробку
+    ещё не идёт, и человеку надо сказать, что делать дальше."""
+    _onboard(client)
+    html = client.get("/setup?step=8").text
+    assert "направить трафик" in html
+    assert "/connect" in html

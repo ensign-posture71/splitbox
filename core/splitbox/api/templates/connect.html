@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if lan_clients %}
+<div class="msg ok">Трафик из локальной сети уже идёт через коробку —
+за последний час её использовали: {{ lan_clients|map(attribute='peer')|join(', ') }}.</div>
+{% else %}
+<div class="msg bad">Пока через коробку не ходит никто из локальной сети.
+Ниже — что для этого сделать. Начните с проверки на одном устройстве:
+так вы ничем не рискуете.</div>
+{% endif %}
+
+<div class="card wide" style="padding:16px 18px">
+  <div class="nm">Адреса, которые понадобятся</div>
+  <table class="list" style="margin-top:6px">
+    <tr><td class="muted" style="width:220px">Адрес коробки (шлюз и DNS)</td>
+        <td><code style="font-size:15px">{{ box_ip }}</code></td></tr>
+    {% if cfg.work_mode.value == 'full' %}
+    <tr><td class="muted">Порт WireGuard (пробросить снаружи)</td>
+        <td><code style="font-size:15px">{{ cfg.wireguard.listen_port }}/UDP</code></td></tr>
+    <tr><td class="muted">Внешний адрес</td>
+        <td>{% if cfg.endpoint_host %}<code>{{ cfg.endpoint_host }}</code>
+            {% else %}<span class="bad">не задан</span> —
+            <a href="/settings" style="color:#f97316">укажите в настройках</a>{% endif %}</td></tr>
+    {% endif %}
+  </table>
+</div>
+
+<h2>Шаг 1 · Проверьте на одном устройстве</h2>
+<p class="hint">Ничего не меняя в роутере: вы вписываете адреса вручную только
+на одном компьютере или телефоне. Не понравится — вернёте «автоматически»,
+и всё будет как прежде.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
+  <div class="card">
+    <div class="nm">Windows</div>
+    <div class="desc">Параметры → Сеть и Интернет → ваше подключение →
+    «Изменить» у пункта «Назначение IP» → вручную → IPv4 включить.
+    Шлюз и «Предпочитаемый DNS» — <code>{{ box_ip }}</code>.
+    IP-адрес оставьте свой, маску <code>255.255.255.0</code>.</div>
+  </div>
+  <div class="card">
+    <div class="nm">macOS</div>
+    <div class="desc">Системные настройки → Сеть → Wi-Fi → «Подробности» →
+    TCP/IP: «Вручную», маршрутизатор — <code>{{ box_ip }}</code>;
+    вкладка DNS: добавить <code>{{ box_ip }}</code> и убрать остальные.</div>
+  </div>
+  <div class="card">
+    <div class="nm">iPhone / iPad</div>
+    <div class="desc">Настройки → Wi-Fi → «i» у сети → «Настройка IP» →
+    «Вручную»: маршрутизатор <code>{{ box_ip }}</code>.
+    Ниже «Настройка DNS» → «Вручную» → <code>{{ box_ip }}</code>.</div>
+  </div>
+  <div class="card">
+    <div class="nm">Android</div>
+    <div class="desc">Настройки → Wi-Fi → удерживать сеть → «Изменить сеть» →
+    Дополнительно → «Пользовательские»: шлюз и DNS 1 —
+    <code>{{ box_ip }}</code>.</div>
+  </div>
+</div>
+<p class="hint">Через минуту вернитесь на эту страницу: сверху должно
+появиться зелёное сообщение, что трафик пошёл. Проверьте заодно на
+<a href="/stats" style="color:#f97316">странице статистики</a> — там видно,
+какое устройство и куда ходило.</p>
+
+<h2>Шаг 2 · Переключите всю сеть</h2>
+<p class="hint">Когда убедились, что на одном устройстве всё работает.
+Дальше выберите то, что ближе вашему роутеру.</p>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(420px,1fr))">
+  <div class="card">
+    <div class="nm">Обычный роутер (Keenetic, TP-Link, ASUS, Tenda…)</div>
+    <div class="desc">Меняется одна страница настроек — DHCP.</div>
+    <ol class="sub" style="margin:10px 0 0;padding-left:18px;line-height:1.9">
+      <li>Откройте настройки роутера (обычно <code>192.168.1.1</code>
+          или <code>192.168.0.1</code>).</li>
+      <li>Найдите раздел <b>DHCP-сервер</b> (бывает внутри «Домашняя сеть»
+          или «LAN»).</li>
+      <li>Поле <b>Основной шлюз</b> (Default Gateway) — впишите
+          <code>{{ box_ip }}</code>.</li>
+      <li>Поле <b>DNS-сервер</b> — тоже <code>{{ box_ip }}</code>.</li>
+      <li>Сохраните. Устройства подхватят настройки в течение часа —
+          или сразу, если выключить и включить Wi-Fi.</li>
+    </ol>
+    <div class="hint" style="margin-top:8px">Если поля «Основной шлюз» нет —
+    роутер этого не умеет. Тогда остаётся вариант «только блокировка
+    рекламы» ниже либо ручная настройка на каждом устройстве.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">MikroTik — без риска для всей сети</div>
+    <div class="desc">Правильный способ: отдельная таблица маршрутизации
+    с автоматическим возвратом, если коробка пропадёт.</div>
+    <pre style="background:#101215;border:1px solid #23282f;border-radius:9px;
+         padding:11px;overflow-x:auto;font-size:12px;margin-top:8px"><code># маршрут в коробку; если она умрёт — трафик пойдёт обычным путём
+/ip route add dst-address=0.0.0.0/0 gateway={{ box_ip }} \
+    routing-table=splitbox check-gateway=ping distance=1
+/ip route add dst-address=0.0.0.0/0 gateway=WAN-ШЛЮЗ \
+    routing-table=splitbox distance=10
+
+# заворачиваем в неё трафик локальной сети
+/ip firewall mangle add chain=prerouting in-interface-list=LAN \
+    action=mark-routing new-routing-mark=splitbox passthrough=no \
+    comment="splitbox"
+
+# fasttrack обходит маршрутизацию — исключаем помеченное
+/ip firewall filter set [find action=fasttrack-connection] \
+    routing-mark=no-mark</code></pre>
+    <div class="hint" style="margin-top:8px">Замените <code>WAN-ШЛЮЗ</code> на
+    адрес шлюза провайдера (<code>/ip route print</code>, строка с
+    <code>0.0.0.0/0</code>). DNS переключается отдельно: в DHCP-сети
+    укажите <code>{{ box_ip }}</code>.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">Только блокировка рекламы</div>
+    <div class="desc">Если трогать маршрутизацию не хочется: укажите коробку
+    только как DNS. Реклама режется, но туннель работать не будет —
+    заблокированные сайты не откроются.</div>
+    <div class="hint" style="margin-top:8px">В роутере: DHCP → DNS-сервер →
+    <code>{{ box_ip }}</code>.</div>
+  </div>
+
+  {% if cfg.work_mode.value == 'full' %}
+  <div class="card">
+    <div class="nm">Доступ извне (WireGuard)</div>
+    <div class="desc">Чтобы телефон подключался из поездки, роутер должен
+    пропускать соединение внутрь.</div>
+    <ol class="sub" style="margin:10px 0 0;padding-left:18px;line-height:1.9">
+      <li>В роутере найдите <b>Проброс портов</b> (Port Forwarding,
+          Virtual Server, NAT).</li>
+      <li>Внешний порт <code>{{ cfg.wireguard.listen_port }}</code>,
+          протокол <b>UDP</b>.</li>
+      <li>Внутренний адрес <code>{{ box_ip }}</code>, порт тот же.</li>
+    </ol>
+    <div class="hint" style="margin-top:8px">Нужен «белый» IP от провайдера.
+    Если адрес серый (за общим NAT), подключение снаружи не заработает —
+    спросите у провайдера белый адрес, обычно это платная опция.</div>
+  </div>
+  {% endif %}
+</div>
+
+<h2>Если что-то пошло не так</h2>
+<div class="card wide">
+  <div class="desc">Коробка сделана так, чтобы не оставить вас без интернета:
+  если туннель сломается, она сама перестаёт перехватывать трафик, и сеть
+  продолжает работать напрямую. Но если что-то не так с самой коробкой:</div>
+  <ol class="sub" style="margin:10px 0 0;padding-left:18px;line-height:1.9">
+    <li><b>Верните прежние настройки роутера</b> — в DHCP укажите обратно
+        адрес роутера в полях «Шлюз» и «DNS». Для MikroTik:
+        <code>/ip firewall mangle disable [find comment=splitbox]</code>.</li>
+    <li>На устройстве, где меняли вручную, верните «Автоматически».</li>
+    <li>Перезагрузите устройство или переподключите Wi-Fi.</li>
+  </ol>
+  <div class="hint" style="margin-top:8px">Панель коробки останется доступна
+  по адресу <code>https://{{ box_ip }}:8443</code> в любом случае — она не
+  зависит от того, идёт через неё трафик или нет.</div>
+</div>
+{% endblock %}

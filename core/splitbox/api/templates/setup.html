@@ -133,7 +133,37 @@
     <p class="sub">Это бывает сразу после запуска — подождите полминуты
     и обновите страницу.</p>
     {% endif %}
-    <a class="btn" href="/" style="margin-top:16px">Открыть панель</a>
+    <form method="get" action="/setup" style="margin-top:16px">
+      <input type="hidden" name="step" value="8">
+      <button type="submit">Дальше: подключить сеть</button>
+    </form>
+  </div>
+
+  {% elif step == 8 %}
+  <div class="card">
+    <h1>Последний шаг: направить трафик</h1>
+    <p class="sub" style="margin:12px 0">Коробка готова, но пока через неё
+    никто не ходит: устройства по-прежнему выходят в интернет мимо.
+    Нужно один раз сказать сети, что теперь шлюз — это она.</p>
+
+    <div style="background:#101215;border:1px solid #23282f;border-radius:10px;
+                padding:13px 15px;margin-bottom:14px">
+      <div class="hint" style="margin:0">адрес коробки — шлюз и DNS</div>
+      <div style="font:600 20px ui-monospace,Menlo,monospace;color:#fff;
+                  margin-top:3px">{{ box_ip }}</div>
+    </div>
+
+    <p class="sub"><b>Начните с одного устройства.</b> Впишите этот адрес
+    как «шлюз» и «DNS» вручную на своём телефоне или компьютере — роутер
+    трогать не нужно, и в любой момент можно вернуть «автоматически».
+    Убедились, что всё работает — тогда переключайте всю сеть в настройках
+    роутера.</p>
+
+    <a class="btn" href="/connect" style="margin-top:14px">Открыть инструкцию
+      для моего роутера</a>
+    <p class="hint" style="margin-top:10px">Инструкция всегда доступна в
+    панели — вкладка «Подключение». Там же видно, пошёл ли трафик.</p>
+    <a class="btn ghost" href="/" style="margin-top:6px">Перейти в панель</a>
   </div>
   {% endif %}
 </div>
