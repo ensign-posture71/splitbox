@@ -192,5 +192,89 @@ def test_own_server_delete(client):
     client.post("/setup/source", data={"link": VLESS})
     from splitbox.api import state
     assert len(state.get().own_servers) == 1
-    client.post("/subscriptions/own/0/delete")
+    client.post("/servers/own/0/delete")
     assert state.get().own_servers == []
+
+
+def test_servers_page_and_bulk_save(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    assert client.get("/servers").status_code == 200
+
+    r = client.post("/servers", data={
+        "own.0.name": "Главный",
+        "own.0.enabled": "1",
+        "own.0.in_own": "1",
+        # in_fast не отмечен — сервер выходит из группы скорости
+        "bal.own.strategy": "latency",
+        "bal.own.interval": "2m",
+        "bal.own.tolerance": "120",
+        "bal.fast.strategy": "pinned",
+        "bal.fast.interval": "5m",
+        "bal.fast.tolerance": "60",
+        "bal.fast.pinned_tag": "bk-nl",
+    }, follow_redirects=False)
+    assert "err=" not in r.headers["location"], r.headers["location"]
+
+    from splitbox.api import state
+    cfg = state.get()
+    assert cfg.own_servers[0].name == "Главный"
+    assert cfg.own_servers[0].in_own and not cfg.own_servers[0].in_fast
+    assert cfg.balancing.own.interval == "2m"
+    assert cfg.balancing.own.tolerance == 120
+    assert cfg.balancing.fast.strategy.value == "pinned"
+    assert cfg.balancing.fast.pinned_tag == "bk-nl"
+
+
+def test_servers_save_rejects_bad_interval(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    r = client.post("/servers", data={
+        "own.0.enabled": "1", "own.0.in_own": "1",
+        "bal.own.strategy": "latency", "bal.own.interval": "пять минут",
+        "bal.own.tolerance": "60",
+        "bal.fast.strategy": "latency", "bal.fast.interval": "5m",
+        "bal.fast.tolerance": "60",
+    }, follow_redirects=False)
+    assert "err=" in r.headers["location"]
+    from splitbox.api import state
+    assert state.get().balancing.own.interval == "5m"     # прежнее уцелело
+
+
+def test_multiple_sources_can_coexist(client):
+    """Подписок и своих серверов может быть сколько угодно."""
+    _onboard(client)
+    for i in range(3):
+        client.post("/servers/add", data={
+            "name": f"Сервер {i}",
+            "url": VLESS.replace("nl.example.net", f"s{i}.example.net")})
+    for i in range(2):
+        client.post("/servers/add", data={"name": f"Подписка {i}",
+                                          "url": f"https://sub{i}.example/x"})
+    from splitbox.api import state
+    cfg = state.get()
+    assert len(cfg.own_servers) == 3 and len(cfg.subscriptions) == 2
+
+
+def test_subscription_hwid_editable(client):
+    """После находки с лимитом устройств идентификатор должен быть
+    правим руками — иначе подписку не оживить."""
+    _onboard(client)
+    client.post("/servers/add", data={"url": "https://sub.example/x"})
+    from splitbox.api import state
+    sub = state.get().subscriptions[0]
+    client.post("/servers", data={
+        f"sub.{sub.id}.name": "Основная",
+        f"sub.{sub.id}.enabled": "1",
+        f"sub.{sub.id}.in_fast": "1",
+        f"sub.{sub.id}.hwid": "8c5ee7df-a08c-4837-9b72-5026a9fd1e33",
+        "bal.own.strategy": "latency", "bal.own.interval": "5m", "bal.own.tolerance": "60",
+        "bal.fast.strategy": "latency", "bal.fast.interval": "5m", "bal.fast.tolerance": "60",
+    })
+    assert state.get().subscriptions[0].hwid == "8c5ee7df-a08c-4837-9b72-5026a9fd1e33"
+
+
+def test_stats_page_renders(client):
+    _onboard(client)
+    assert client.get("/stats").status_code == 200
+    assert client.get("/stats?hours=168").status_code == 200

@@ -27,15 +27,21 @@ from pathlib import Path
 
 from .. import adguard as adguard_mod
 from .. import apply as apply_mod
-from .. import catalog, health, subs, wg
-from ..model import (Config, DomainRule, Mode, NetworkRule, OwnServer, Policy,
-                     Subscription)
+from .. import catalog, charts, health, paths, stats, subs, wg
+from .. import render as render_mod
+from ..model import (Balancer, Config, DomainRule, Mode, NetworkRule,
+                     OwnServer, Policy, Strategy, Subscription)
 from . import auth, state
 
 log = logging.getLogger("splitbox.api")
 
 BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+# Форматирование величин и подписи направлений — в шаблонах они нужны
+# повсеместно, поэтому проще отдать их глобально, чем таскать в контексте.
+templates.env.globals["human_bytes"] = stats.human_bytes
+templates.env.globals["direction_label"] = charts.DIRECTION_LABEL
+templates.env.globals["direction_color"] = charts.DIRECTION_COLOR
 limiter = auth.LoginLimiter()
 
 app = FastAPI(title="splitbox", docs_url=None, redoc_url=None, openapi_url=None)
@@ -104,8 +110,10 @@ def _collect_backups() -> list[dict]:
     def put(c: Config):
         for sub in c.subscriptions:
             if sub.id in results:
+                r = results[sub.id]
                 sub.last_refresh = now
-                sub.last_count = len(results[sub.id].outbounds)
+                sub.last_count = len(r.outbounds)
+                sub.last_notice = "; ".join(dict.fromkeys(r.notices))[:200]
     cfg = state.update(put)
 
     global _last_notices
@@ -113,15 +121,23 @@ def _collect_backups() -> list[dict]:
 
     pool: list[dict] = []
     used: set = set()
-    for result in results.values():
+    for sub in cfg.subscriptions:
+        result = results.get(sub.id)
+        if not result:
+            continue
+        # Куда пускать серверы этой подписки — решает владелец: чужой
+        # сервер видит весь проходящий через него трафик.
+        groups = (["fast"] if sub.in_fast else []) + (["own"] if sub.in_own else [])
         for ob in result.outbounds:
             ob = dict(ob)
             ob["tag"] = subs.safe_tag(ob["tag"].removeprefix("bk-"), used)
+            ob["_groups"] = groups
             pool.append(ob)
     for link in cfg.manual_nodes:
         try:
             ob = subs.parse_manual_link(link)
             ob["tag"] = subs.safe_tag(ob["tag"].removeprefix("bk-"), used)
+            ob["_groups"] = ["fast"]
             pool.append(ob)
         except ValueError:
             continue
@@ -483,105 +499,145 @@ def device_qr(request: Request, peer_id: str):
     return Response(buf.getvalue(), media_type="image/svg+xml")
 
 
-# --- Подписки и серверы ------------------------------------------------------
+# --- Серверы, подписки, балансировка -----------------------------------------
 
-@app.get("/subscriptions", response_class=HTMLResponse)
-def subscriptions_page(request: Request):
+@app.get("/servers", response_class=HTMLResponse)
+def servers_page(request: Request):
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
-    return _page(request, "subscriptions.html", cfg,
-                 subscriptions=cfg.subscriptions, own_servers=cfg.own_servers,
-                 manual_nodes=cfg.manual_nodes,
-                 n_backups=len(apply_mod.load_backups()))
+    backups = apply_mod.load_backups()
+    return _page(request, "servers.html", cfg,
+                 backups=backups,
+                 backup_tags=[b["tag"] for b in backups],
+                 own_tags=[o["tag"] for o in render_mod._own_outbounds(cfg)])
 
 
-@app.post("/subscriptions/add")
-def subscription_add(request: Request, name: str = Form(""), url: str = Form(...)):
+@app.post("/servers")
+async def servers_save(request: Request):
+    """Массовое сохранение: имена, участие в группах, включённость,
+    идентификаторы устройств и настройки обеих групп.
+
+    Ключ строки входит в имя поля (own.3.name, sub.a1b2.hwid) — параллельных
+    списков нет, поэтому рассинхронизация значений и флагов невозможна.
+    """
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    form = await request.form()
+
+    def put(c: Config):
+        for i, srv in enumerate(c.own_servers):
+            srv.name = (form.get(f"own.{i}.name") or srv.name).strip()
+            srv.enabled = form.get(f"own.{i}.enabled") == "1"
+            srv.in_own = form.get(f"own.{i}.in_own") == "1"
+            srv.in_fast = form.get(f"own.{i}.in_fast") == "1"
+        for sub in c.subscriptions:
+            sub.name = (form.get(f"sub.{sub.id}.name") or sub.name).strip()
+            sub.enabled = form.get(f"sub.{sub.id}.enabled") == "1"
+            sub.in_fast = form.get(f"sub.{sub.id}.in_fast") == "1"
+            sub.in_own = form.get(f"sub.{sub.id}.in_own") == "1"
+            hwid = (form.get(f"sub.{sub.id}.hwid") or "").strip()
+            if hwid:
+                sub.hwid = hwid
+        for group in ("own", "fast"):
+            bal: Balancer = getattr(c.balancing, group)
+            bal.strategy = Strategy(form.get(f"bal.{group}.strategy", "latency"))
+            bal.interval = (form.get(f"bal.{group}.interval") or "5m").strip()
+            bal.tolerance = int(form.get(f"bal.{group}.tolerance") or 60)
+            bal.pinned_tag = (form.get(f"bal.{group}.pinned_tag") or "").strip()
+
+    try:
+        cfg = state.update(put)
+    except Exception as exc:      # noqa: BLE001 — показываем пользователю
+        return _redirect("/servers", err=f"Настройки не приняты: {exc}")
+    _collect_backups()
+    msg, err = _try_apply(state.get())
+    return _redirect("/servers", msg=msg, err=err)
+
+
+@app.post("/servers/add")
+def server_add(request: Request, name: str = Form(""), url: str = Form(...)):
+    """Одна форма на всё: по виду ссылки понятно, что добавляют."""
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
     url = url.strip()
-    if url.startswith(("vless://", "trojan://", "ss://")):
-        try:
-            subs.parse_manual_link(url)
-        except ValueError as exc:
-            return _redirect("/subscriptions", err=str(exc))
-        cfg = state.update(lambda c: c.manual_nodes.append(url))
-    elif url.startswith(("http://", "https://")):
-        cfg = state.update(lambda c: c.subscriptions.append(
-            Subscription(name=name.strip() or "Подписка", url=url)))
-    else:
-        return _redirect("/subscriptions",
-                         err="Нужна ссылка на подписку (https://…) или vless://")
+    try:
+        if url.startswith(("http://", "https://")):
+            state.update(lambda c: c.subscriptions.append(
+                Subscription(name=name.strip() or "Подписка", url=url)))
+        elif url.startswith("vless://"):
+            ob = subs.parse_manual_link(url)
+            tls = ob.get("tls", {})
+            state.update(lambda c: c.own_servers.append(OwnServer(
+                name=name.strip() or ob["tag"].removeprefix("bk-"),
+                server=ob["server"], server_port=ob["server_port"],
+                uuid=ob["uuid"], flow=ob.get("flow", ""),
+                sni=tls.get("server_name", ""),
+                fingerprint=tls.get("utls", {}).get("fingerprint", "chrome"),
+                reality_public_key=tls.get("reality", {}).get("public_key", ""),
+                reality_short_id=tls.get("reality", {}).get("short_id", ""))))
+        elif url.startswith(("trojan://", "ss://")):
+            subs.parse_manual_link(url)     # проверяем до сохранения
+            state.update(lambda c: c.manual_nodes.append(url))
+        else:
+            return _redirect("/servers", err="Нужна ссылка на подписку "
+                                             "(https://…) или сервер (vless://…)")
+    except ValueError as exc:
+        return _redirect("/servers", err=str(exc))
     _collect_backups()
     msg, err = _try_apply(state.get())
-    return _redirect("/subscriptions", msg=msg, err=err)
+    return _redirect("/servers", msg=msg, err=err)
 
 
-@app.post("/subscriptions/{sub_id}/toggle")
-def subscription_toggle(request: Request, sub_id: str):
-    cfg = state.get()
-    if guard := _guard(request, cfg):
-        return guard
-
-    def put(c: Config):
-        for s in c.subscriptions:
-            if s.id == sub_id:
-                s.enabled = not s.enabled
-    cfg = state.update(put)
-    _collect_backups()
-    msg, err = _try_apply(state.get())
-    return _redirect("/subscriptions", msg=msg, err=err)
-
-
-@app.post("/subscriptions/{sub_id}/delete")
-def subscription_delete(request: Request, sub_id: str):
-    cfg = state.get()
-    if guard := _guard(request, cfg):
-        return guard
-    cfg = state.update(lambda c: c.subscriptions.__setitem__(
-        slice(None), [s for s in c.subscriptions if s.id != sub_id]))
-    _collect_backups()
-    msg, err = _try_apply(state.get())
-    return _redirect("/subscriptions", msg=msg or "Подписка удалена", err=err)
-
-
-@app.post("/subscriptions/own/{idx}/delete")
+@app.post("/servers/own/{idx}/delete")
 def own_server_delete(request: Request, idx: int):
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
     if not (0 <= idx < len(cfg.own_servers)):
-        return _redirect("/subscriptions", err="Нет такого сервера")
+        return _redirect("/servers", err="Нет такого сервера")
     cfg = state.update(lambda c: c.own_servers.pop(idx))
     msg, err = _try_apply(cfg)
-    return _redirect("/subscriptions", msg=msg or "Сервер удалён", err=err)
+    return _redirect("/servers", msg=msg or "Сервер удалён", err=err)
 
 
-@app.post("/subscriptions/manual/{idx}/delete")
+@app.post("/servers/sub/{sub_id}/delete")
+def subscription_delete(request: Request, sub_id: str):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    state.update(lambda c: c.subscriptions.__setitem__(
+        slice(None), [s for s in c.subscriptions if s.id != sub_id]))
+    _collect_backups()
+    msg, err = _try_apply(state.get())
+    return _redirect("/servers", msg=msg or "Подписка удалена", err=err)
+
+
+@app.post("/servers/manual/{idx}/delete")
 def manual_node_delete(request: Request, idx: int):
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
     if not (0 <= idx < len(cfg.manual_nodes)):
-        return _redirect("/subscriptions", err="Нет такой ссылки")
+        return _redirect("/servers", err="Нет такой ссылки")
     state.update(lambda c: c.manual_nodes.pop(idx))
     _collect_backups()
     msg, err = _try_apply(state.get())
-    return _redirect("/subscriptions", msg=msg or "Ссылка удалена", err=err)
+    return _redirect("/servers", msg=msg or "Ссылка удалена", err=err)
 
 
-@app.post("/subscriptions/refresh")
-def subscriptions_refresh(request: Request):
+@app.post("/servers/refresh")
+def servers_refresh(request: Request):
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
     n = len(_collect_backups())
     if n == 0:
-        return _redirect("/subscriptions", err=_no_servers_error())
+        return _redirect("/servers", err=_no_servers_error())
     msg, err = _try_apply(state.get())
-    return _redirect("/subscriptions",
+    return _redirect("/servers",
                      msg=msg and f"Обновлено, серверов в резерве: {n}", err=err)
 
 
@@ -596,28 +652,54 @@ def settings_page(request: Request):
 
 
 @app.post("/settings")
-def settings_save(request: Request, endpoint_host: str = Form(""),
-                  adblock: str = Form(""), password: str = Form(""),
-                  password2: str = Form("")):
+async def settings_save(request: Request):
     cfg = state.get()
     if guard := _guard(request, cfg):
         return guard
+    form = await request.form()
+    password = (form.get("password") or "").strip()
     if password:
         if len(password) < 8:
             return _redirect("/settings", err="Пароль короче 8 символов")
-        if password != password2:
+        if password != (form.get("password2") or ""):
             return _redirect("/settings", err="Пароли не совпадают")
 
     def put(c: Config):
-        c.endpoint_host = endpoint_host.strip()
-        c.dns.adblock = bool(adblock)
+        c.endpoint_host = (form.get("endpoint_host") or "").strip()
+        c.timezone = (form.get("timezone") or "UTC").strip()
+        c.dns.adblock = form.get("adblock") == "1"
+        upstreams = [u.strip() for u in
+                     (form.get("upstreams") or "").splitlines() if u.strip()]
+        if upstreams:
+            c.dns.upstreams = upstreams
+        c.wireguard.listen_port = int(form.get("wg_port") or 51820)
+        subnet = (form.get("wg_subnet") or "").strip()
+        if subnet and subnet != c.wireguard.subnet:
+            # Смена подсети не трогает уже выданные адреса: у людей на руках
+            # рабочие конфиги, и молча их сломать нельзя.
+            import ipaddress
+            net = ipaddress.ip_network(subnet)
+            if any(ipaddress.ip_address(p.address) not in net
+                   for p in c.wireguard.peers):
+                raise ValueError(
+                    "в новой подсети не помещаются уже выданные адреса — "
+                    "сначала удалите устройства")
+            c.wireguard.subnet = subnet
+        c.stats.enabled = form.get("stats_enabled") == "1"
+        c.stats.track_hosts = form.get("track_hosts") == "1"
+        c.stats.keep_days = int(form.get("keep_days") or 14)
         if password:
             c.admin.password_hash = auth.hash_password(password)
-    cfg = state.update(put)
-    # Живой тумблер AdGuard — через его API; провал не роняет сохранение
-    # (config.yaml уже записан, bootstrap применит при пересоздании).
+
+    try:
+        cfg = state.update(put)
+    except Exception as exc:      # noqa: BLE001 — показываем пользователю
+        return _redirect("/settings", err=f"Настройки не приняты: {exc}")
     adguard_mod.set_protection(cfg.dns.adblock)
     msg, err = _try_apply(cfg)
+    if not err and cfg.wireguard.listen_port != 51820:
+        msg = (msg + " Порт WireGuard изменён — проверьте, что он проброшен "
+               "снаружи (WG_PORT в .env и перезапуск стека).")
     return _redirect("/settings", msg=msg or "Сохранено", err=err)
 
 
@@ -658,6 +740,64 @@ def settings_restore(request: Request, backup: UploadFile = File(...)):
                      msg=msg and "Восстановлено из бэкапа. " + msg, err=err)
 
 
+# --- Статистика --------------------------------------------------------------
+
+_peer_cache: dict[str, str] = {}
+_peer_cache_at = 0.0
+
+
+def _resolve_peer(ip: str) -> str:
+    """Адрес клиента -> человеческое имя устройства.
+
+    Кэш на полминуты: сборщик зовёт это на каждое соединение, а читать
+    config.yaml с диска по десять раз в секунду незачем.
+    """
+    import time as _t
+    global _peer_cache, _peer_cache_at
+    if not ip:
+        return "неизвестно"
+    if ip.startswith("127."):
+        # Это собственная проверка связи коробки, а не чьё-то устройство.
+        return "коробка (проверка связи)"
+    if _t.monotonic() - _peer_cache_at > 30:
+        cfg = state.get()
+        _peer_cache = {p.address: p.name for p in cfg.wireguard.peers}
+        _peer_cache_at = _t.monotonic()
+    return _peer_cache.get(ip, ip)
+
+
+def _stats_conn():
+    return stats.connect(paths.STATS_DB)
+
+
+@app.get("/stats", response_class=HTMLResponse)
+def stats_page(request: Request):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    hours = min(max(int(request.query_params.get("hours", "24")), 1), 24 * 90)
+    peer = request.query_params.get("peer", "")
+    conn = _stats_conn()
+    try:
+        ctx = {
+            "hours": hours,
+            "peer": peer,
+            "totals": stats.totals(conn, hours),
+            "peers": stats.by_peer(conn, hours),
+            "outbounds": stats.by_outbound(conn, hours)[:12],
+            "directions": stats.by_direction(conn, hours),
+            "hosts": stats.top_hosts(conn, hours, peer=peer)
+                     if cfg.stats.track_hosts else [],
+            "chart": charts.area_chart(stats.series(conn, hours), hours,
+                                       cfg.timezone),
+            "donut": charts.donut(stats.by_direction(conn, hours)),
+            "known_peers": stats.known_peers(conn, hours),
+        }
+    finally:
+        conn.close()
+    return _page(request, "stats.html", cfg, **ctx)
+
+
 # --- Планировщик суточного refresh -------------------------------------------
 
 def _scheduler():
@@ -677,5 +817,7 @@ def _scheduler():
 
 
 @app.on_event("startup")
-def start_scheduler():
+def start_background():
     threading.Thread(target=_scheduler, daemon=True).start()
+    stats.Collector(paths.STATS_DB, _resolve_peer,
+                    lambda: state.get().stats).start()

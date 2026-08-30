@@ -163,3 +163,59 @@ def test_golden_lan(sample_config, backup_outbounds):
         golden.parent.mkdir(exist_ok=True)
         golden.write_text(got)
     assert got == golden.read_text()
+
+
+# --- Балансировка и участие серверов в группах ------------------------------
+
+def test_pinned_strategy_makes_selector(sample_config, backup_outbounds):
+    from splitbox.model import Strategy
+    sample_config.balancing.fast.strategy = Strategy.pinned
+    sample_config.balancing.fast.pinned_tag = "bk-de-1"
+    cfg = render.render_config(sample_config, backup_outbounds)
+    fast = next(o for o in cfg["outbounds"] if o["tag"] == "fast-out")
+    assert fast["type"] == "selector"
+    assert fast["default"] == "bk-de-1"
+
+
+def test_pinned_falls_back_to_first_when_tag_gone(sample_config, backup_outbounds):
+    from splitbox.model import Strategy
+    sample_config.balancing.fast.strategy = Strategy.pinned
+    sample_config.balancing.fast.pinned_tag = "сервер-которого-нет"
+    cfg = render.render_config(sample_config, backup_outbounds)
+    fast = next(o for o in cfg["outbounds"] if o["tag"] == "fast-out")
+    assert fast["default"] in fast["outbounds"]
+
+
+def test_balancer_params_reach_config(sample_config, backup_outbounds):
+    sample_config.balancing.fast.interval = "90s"
+    sample_config.balancing.fast.tolerance = 150
+    cfg = render.render_config(sample_config, backup_outbounds)
+    fast = next(o for o in cfg["outbounds"] if o["tag"] == "fast-out")
+    assert fast["interval"] == "90s" and fast["tolerance"] == 150
+
+
+def test_own_server_excluded_from_fast(sample_config, backup_outbounds):
+    """Свой сервер можно не пускать в группу скорости."""
+    sample_config.own_servers[0].in_fast = False
+    cfg = render.render_config(sample_config, backup_outbounds)
+    fast = next(o for o in cfg["outbounds"] if o["tag"] == "fast-out")
+    assert not any(t.startswith("own-") for t in fast["outbounds"])
+
+
+def test_backup_can_join_own_group(sample_config, backup_outbounds):
+    """Сервер подписки, помеченный как доверенный, попадает и в «свой»."""
+    backup_outbounds[0]["_groups"] = ["fast", "own"]
+    cfg = render.render_config(sample_config, backup_outbounds)
+    own = next(o for o in cfg["outbounds"] if o["tag"] == "own-out")
+    assert "bk-nl-1" in own["outbounds"]
+    # служебное поле не должно утечь в конфиг
+    assert all("_groups" not in o for o in cfg["outbounds"])
+
+
+def test_no_group_membership_is_error(sample_config, backup_outbounds):
+    sample_config.own_servers[0].in_own = False
+    sample_config.own_servers[0].in_fast = False
+    for ob in backup_outbounds:
+        ob["_groups"] = []
+    with pytest.raises(render.RenderError, match="ни в одну группу"):
+        render.render_config(sample_config, backup_outbounds)

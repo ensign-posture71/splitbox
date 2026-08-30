@@ -1,52 +1,98 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(420px,1fr))">
+<form method="post" action="/settings">
+<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(400px,1fr))">
   <div class="card">
-    <div class="nm">Основное</div>
-    <form class="stack" method="post" action="/settings" style="margin-top:10px">
-      <label class="hint">Внешний адрес коробки (IP или домен) — попадает
-      в конфиги устройств</label>
+    <div class="nm">Доступ извне</div>
+    <div class="desc">Адрес, по которому устройства находят коробку. Попадает
+    в конфиги WireGuard — без него QR-коды нерабочие.</div>
+    <label class="hint" style="margin-top:10px">IP или домен
       <input type="text" name="endpoint_host" value="{{ cfg.endpoint_host }}"
-             placeholder="1.2.3.4 или box.example.com">
-      <label class="hint" style="display:flex;gap:8px;align-items:center">
-        <input type="checkbox" name="adblock" value="1" style="width:auto"
-               {{ 'checked' if cfg.dns.adblock }}>
-        Блокировать рекламу (AdGuard)
-      </label>
-      <label class="hint">Новый пароль (пусто = не менять)</label>
-      <input type="password" name="password" placeholder="Новый пароль">
-      <input type="password" name="password2" placeholder="Ещё раз">
-      <button type="submit">Сохранить</button>
-    </form>
+             placeholder="1.2.3.4 или box.example.com" style="margin-top:4px"></label>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <label class="hint" style="flex:1">Порт WireGuard
+        <input type="text" name="wg_port" value="{{ cfg.wireguard.listen_port }}"
+               style="margin-top:4px"></label>
+      <label class="hint" style="flex:1">Подсеть туннеля
+        <input type="text" name="wg_subnet" value="{{ cfg.wireguard.subnet }}"
+               style="margin-top:4px"></label>
+    </div>
+    <div class="hint" style="margin-top:6px">Подсеть меняйте, если она совпадает
+    с вашей домашней сетью. Уже выданные адреса не переезжают.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">DNS и реклама</div>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+      <input type="checkbox" name="adblock" value="1" style="width:auto"
+             {{ 'checked' if cfg.dns.adblock }}> Блокировать рекламу</label>
+    <label class="hint" style="margin-top:10px">Вышестоящие DNS-серверы, по одному в строке
+      <textarea name="upstreams" rows="3" style="width:100%;margin-top:4px;
+        background:#171a1f;border:1px solid #2b313a;border-radius:9px;
+        color:#e8eaed;padding:10px;font:12px ui-monospace,Menlo,monospace"
+        >{{ cfg.dns.upstreams|join('\n') }}</textarea></label>
+    <div class="hint">Запросы уходят к ним по шифрованному каналу от имени
+    коробки, а не от устройств.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">Статистика</div>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+      <input type="checkbox" name="stats_enabled" value="1" style="width:auto"
+             {{ 'checked' if cfg.stats.enabled }}> Собирать статистику трафика</label>
+    <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <input type="checkbox" name="track_hosts" value="1" style="width:auto"
+             {{ 'checked' if cfg.stats.track_hosts }}> Записывать, кто на какие сайты ходил</label>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <label class="hint" style="flex:1">Хранить, дней
+        <input type="text" name="keep_days" value="{{ cfg.stats.keep_days }}"
+               style="margin-top:4px"></label>
+      <label class="hint" style="flex:1">Часовой пояс
+        <input type="text" name="timezone" value="{{ cfg.timezone }}"
+               placeholder="Europe/Moscow" style="margin-top:4px"></label>
+    </div>
+    <div class="hint" style="margin-top:6px">Данные хранятся только в коробке
+    и никуда не отправляются. История посещений — вещь чувствительная,
+    выключайте, если она вам не нужна.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">Пароль панели</div>
+    <label class="hint" style="margin-top:10px">Новый пароль (пусто — не менять)
+      <input type="password" name="password" style="margin-top:4px"></label>
+    <label class="hint" style="margin-top:8px">Ещё раз
+      <input type="password" name="password2" style="margin-top:4px"></label>
   </div>
 
   <div class="card">
     <div class="nm">Резервная копия</div>
-    <p class="desc" style="margin:8px 0 14px">Один файл со всеми настройками,
-    устройствами и ключами. Храните его в надёжном месте: с ним коробку можно
-    поднять заново за минуту.</p>
-    <a class="btn ghost" href="/settings/backup">Скачать config.yaml</a>
-    <form method="post" action="/settings/restore" enctype="multipart/form-data"
-          class="stack" style="margin-top:14px"
-          onsubmit="return confirm('Текущие настройки будут ЗАМЕНЕНЫ содержимым бэкапа. Продолжить?')">
-      <input type="file" name="backup" accept=".yaml,.yml" required
-             style="color:#8b98a5;font-size:13px">
-      <button class="ghost" type="submit">Восстановить из бэкапа</button>
-    </form>
+    <div class="desc">Один файл со всеми настройками, устройствами и ключами.
+    С ним коробка поднимается заново за минуту.</div>
+    <a class="btn ghost" href="/settings/backup" style="margin-top:12px">Скачать config.yaml</a>
   </div>
 
   <div class="card">
-    <div class="nm">Режим</div>
-    <p class="desc" style="margin:8px 0">
-      {% if mode == 'vps' %}
-      <b>VPS</b> — устройства подключаются через WireGuard. Весь «прочий»
-      трафик выходит с адреса этого сервера.
-      {% else %}
-      <b>Домашний шлюз</b> — коробка стоит в вашей сети и обслуживает
-      и WireGuard-устройства, и всю локальную сеть.
-      {% endif %}
-    </p>
-    <p class="hint">Режим задаётся при установке (переменная MODE в .env).</p>
+    <div class="nm">Режим работы</div>
+    <div class="desc" style="margin-top:8px">
+      {% if mode == 'vps' %}<b>VPS</b> — устройства подключаются через
+      WireGuard, прочий трафик выходит с адреса этого сервера.
+      {% else %}<b>Домашний шлюз</b> — коробка обслуживает и WireGuard-устройства,
+      и всю локальную сеть.{% endif %}
+    </div>
+    <div class="hint" style="margin-top:8px">Режим задаётся при установке
+    (MODE в .env) — это свойство развёртывания, а не настройка.</div>
   </div>
 </div>
+
+<div style="margin-top:20px"><button type="submit">Сохранить</button></div>
+</form>
+
+<h2>Восстановление</h2>
+<form method="post" action="/settings/restore" enctype="multipart/form-data"
+      class="row" style="max-width:560px"
+      onsubmit="return confirm('Текущие настройки будут ЗАМЕНЕНЫ содержимым бэкапа. Продолжить?')">
+  <input type="file" name="backup" accept=".yaml,.yml" required
+         style="color:#8b98a5;font-size:13px;flex:1">
+  <button class="ghost" type="submit">Восстановить из бэкапа</button>
+</form>
 {% endblock %}
