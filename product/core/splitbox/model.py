@@ -274,7 +274,8 @@ class AdGuard(_Model):
     username: str = "admin"
     password_bcrypt: str = ""     # пусто = учётка ещё не создана
     password_plain: str = ""      # показывается владельцу в панели
-    port: int = 3000
+    port: int = 3000              # http: только редирект на https
+    port_https: int = 3443        # рабочий адрес интерфейса
 
 
 class Dns(_Model):

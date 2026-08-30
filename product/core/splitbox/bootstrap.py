@@ -38,12 +38,12 @@ def main() -> None:
         store.save(cfg, paths.CONFIG)
         print("[bootstrap] создана учётка AdGuard (пароль показан в панели)")
 
-    tls.ensure_cert(paths.STATE / "tls",
-                    [cfg.endpoint_host] if cfg.endpoint_host else [])
+    cert, key = tls.ensure_cert(paths.STATE / "tls",
+                                [cfg.endpoint_host] if cfg.endpoint_host else [])
 
     conf_dir = paths.STATE / "adguard" / "conf"
-    created = adguard.write_if_missing(cfg, conf_dir)
-    if not created and adguard.ensure_access(cfg, conf_dir):
+    created = adguard.write_if_missing(cfg, conf_dir, str(cert), str(key))
+    if not created and adguard.ensure_access(cfg, conf_dir, str(cert), str(key)):
         print("[bootstrap] доступ к AdGuard приведён к настройкам "
               "(адрес и пароль)")
     print(f"[bootstrap] state готов; AdGuardHome.yaml "

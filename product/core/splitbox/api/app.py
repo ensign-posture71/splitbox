@@ -69,12 +69,12 @@ def _guard(request: Request, cfg: Config) -> RedirectResponse | None:
 def _adguard_url(request: Request, cfg: Config) -> str:
     """Адрес интерфейса AdGuard — тот же хост, что и у панели, свой порт.
 
-    По http, а не https: AdGuard выпускает сертификат только если ему явно
-    его дать, и подсовывать https-ссылку на слушающий http порт значило бы
-    отправлять человека на страницу ошибки.
+    По https: AdGuard получает тот же самоподписанный сертификат, что и
+    панель, а его http-порт настроен только перенаправлять. Отправлять
+    человека из защищённой панели на открытое соединение нельзя.
     """
     host = request.url.hostname or "127.0.0.1"
-    return f"http://{host}:{cfg.adguard.port}"
+    return f"https://{host}:{cfg.adguard.port_https}"
 
 
 def _page(request: Request, name: str, cfg: Config, **ctx) -> HTMLResponse:
@@ -178,7 +178,7 @@ def _no_servers_error() -> str:
 
 # --- Онбординг ---------------------------------------------------------------
 
-SETUP_STEPS = 7
+SETUP_STEPS = 8
 
 
 def _guess_external(request: Request) -> str:
@@ -224,6 +224,10 @@ def setup_page(request: Request):
         ctx["peer"] = cfg.wireguard.peers[-1] if cfg.wireguard.peers else None
     if step == 7:
         ctx["tunnel"] = health.probe_tunnel()
+    if step == 8:
+        # Финальный шаг — самый важный и самый пугающий: трогать роутер.
+        # Без него коробка просто стоит и ничего не делает.
+        ctx["box_ip"] = request.url.hostname or ""
     resp = _page(request, "setup.html", cfg, **ctx)
     token = request.query_params.get("token", "")
     if token:
@@ -790,6 +794,36 @@ def settings_restore(request: Request, backup: UploadFile = File(...)):
     msg, err = _try_apply(state.get())
     return _redirect("/settings",
                      msg=msg and "Восстановлено из бэкапа. " + msg, err=err)
+
+
+# --- Подключение сети --------------------------------------------------------
+
+@app.get("/connect", response_class=HTMLResponse)
+def connect_page(request: Request):
+    """Инструкция «что делать дальше»: коробка поднята, но трафик в неё
+    пока не идёт. Это самый страшный для человека шаг — он трогает роутер,
+    от которого зависит интернет всей семьи, — поэтому здесь и точные
+    адреса, и порядок «сначала одно устройство», и способ всё вернуть.
+    """
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    box_ip = request.url.hostname or ""
+    conn = _stats_conn()
+    try:
+        peers = stats.by_peer(conn, 1)
+    finally:
+        conn.close()
+    # Свои же пробы и WG-клиенты не считаются: нас интересует, пришёл ли
+    # кто-то из локальной сети.
+    wg_names = {p.name for p in cfg.wireguard.peers}
+    lan_clients = [p for p in peers
+                   if p["peer"] not in wg_names
+                   and not p["peer"].startswith("коробка")]
+    return _page(request, "connect.html", cfg,
+                 box_ip=box_ip,
+                 lan_clients=lan_clients,
+                 wg_peers=cfg.wireguard.peers)
 
 
 # --- Статистика --------------------------------------------------------------
