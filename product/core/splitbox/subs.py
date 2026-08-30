@@ -60,6 +60,16 @@ class FetchResult:
     agent: str = ""            # чей ответ выбран
     skipped: int = 0           # отброшено заглушек/мёртвых
     errors: list[str] = field(default_factory=list)
+    # Имена отброшенных записей. Панели пишут туда причину человеческим
+    # языком («Вы превысили лимит устройств»), и это единственная подсказка,
+    # которую пользователь может понять, — показываем её как есть.
+    notices: list[str] = field(default_factory=list)
+
+
+def strip_meta(ob: dict) -> dict:
+    """Убрать служебные поля (с подчёркиванием) перед отдачей в конфиг:
+    sing-box не примет незнакомые ключи."""
+    return {k: v for k, v in ob.items() if not k.startswith("_")}
 
 
 def hwid_headers(hwid: str) -> dict[str, str]:
@@ -128,6 +138,7 @@ def parse_vless(url: str, used: set) -> dict | None:
     ob = {
         "type": "vless",
         "tag": safe_tag(name, used, fallback=p.hostname.split(".")[0]),
+        "_name": name,
         "server": p.hostname,
         "server_port": p.port or 443,
         "uuid": p.username,
@@ -169,6 +180,7 @@ def parse_trojan(url: str, used: set) -> dict | None:
     return {
         "type": "trojan",
         "tag": safe_tag(urllib.parse.unquote(p.fragment or p.hostname), used),
+        "_name": urllib.parse.unquote(p.fragment or ""),
         "server": p.hostname,
         "server_port": p.port or 443,
         "password": urllib.parse.unquote(p.username),
@@ -201,6 +213,7 @@ def parse_ss(url: str, used: set) -> dict | None:
     return {
         "type": "shadowsocks",
         "tag": safe_tag(urllib.parse.unquote(frag or host), used),
+        "_name": urllib.parse.unquote(frag or ""),
         "server": host,
         "server_port": int(port),
         "method": method,
@@ -231,6 +244,7 @@ def from_singbox_json(text: str, used: set) -> list | None:
         ob = dict(ob)
         ob["tag"] = safe_tag(name, used,
                              fallback=str(ob.get("server", "")).split(".")[0])
+        ob["_name"] = name
         ob.pop("domain_resolver", None)   # свой резолвер задаётся у нас
         out.append(ob)
     return out
@@ -256,8 +270,10 @@ def from_clash_yaml(text: str, used: set) -> list | None:
         if not typ or not server or not port.isdigit():
             continue
         tag = safe_tag(fields.get("name", server), used)
+        raw_name = fields.get("name", "")
         if typ == "vless":
-            ob = {"type": "vless", "tag": tag, "server": server.strip(),
+            ob = {"type": "vless", "tag": tag, "_name": raw_name,
+                  "server": server.strip(),
                   "server_port": int(port), "uuid": fields.get("uuid", "")}
             if fields.get("flow"):
                 ob["flow"] = fields["flow"].strip()
@@ -271,12 +287,14 @@ def from_clash_yaml(text: str, used: set) -> list | None:
                              "server_name": fields.get("servername", server).strip()}
             out.append(ob)
         elif typ == "trojan":
-            out.append({"type": "trojan", "tag": tag, "server": server.strip(),
+            out.append({"type": "trojan", "tag": tag, "_name": raw_name,
+                        "server": server.strip(),
                         "server_port": int(port), "password": fields.get("password", ""),
                         "tls": {"enabled": True,
                                 "server_name": fields.get("sni", server).strip()}})
         elif typ == "ss":
-            out.append({"type": "shadowsocks", "tag": tag, "server": server.strip(),
+            out.append({"type": "shadowsocks", "tag": tag, "_name": raw_name,
+                        "server": server.strip(),
                         "server_port": int(port), "method": fields.get("cipher", ""),
                         "password": fields.get("password", "")})
     return out
@@ -326,6 +344,7 @@ def from_xray_json(text: str, used: set) -> list | None:
             ob = {
                 "type": "vless",
                 "tag": safe_tag(remark, used, fallback=str(node["address"]).split(".")[0]),
+                "_name": remark,
                 "server": node["address"],
                 "server_port": int(node["port"]),
                 "uuid": users[0].get("id", ""),
@@ -429,9 +448,14 @@ def fetch_subscription(url: str, hwid: str = "",
         dead = len(got) - len(alive)
         log.info("%s: получено %d, пригодно %d%s", ua, len(got), len(alive),
                  f", заглушек {dead}" if dead else "")
-        result.skipped = max(result.skipped, dead)
+        if dead > result.skipped:
+            result.skipped = dead
+            result.notices = [n for n in
+                              (str(o.get("_name") or "").strip()
+                               for o in got if not usable(o)) if n]
         if len(alive) > len(result.outbounds):
-            result.outbounds, result.agent = alive, ua
+            result.outbounds = [strip_meta(o) for o in alive]
+            result.agent = ua
     return result
 
 
@@ -451,4 +475,4 @@ def parse_manual_link(link: str) -> dict:
     if not usable(ob):
         raise ValueError(f"сервер {ob.get('server')!r} выглядит нерабочим "
                          "(заглушка или голый IP)")
-    return ob
+    return strip_meta(ob)

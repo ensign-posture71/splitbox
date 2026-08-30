@@ -83,6 +83,11 @@ def _try_apply(cfg: Config) -> tuple[str, str]:
         return "", str(exc)
 
 
+# Последние сообщения провайдеров подписок («Вы превысили лимит устройств»
+# и т.п.) — их показываем пользователю, когда рабочих серверов не нашлось.
+_last_notices: list[str] = []
+
+
 def _collect_backups() -> list[dict]:
     """Общий пул резерва: все включённые подписки + ручные ссылки.
 
@@ -103,6 +108,9 @@ def _collect_backups() -> list[dict]:
                 sub.last_count = len(results[sub.id].outbounds)
     cfg = state.update(put)
 
+    global _last_notices
+    _last_notices = [n for r in results.values() for n in r.notices]
+
     pool: list[dict] = []
     used: set = set()
     for result in results.values():
@@ -120,6 +128,22 @@ def _collect_backups() -> list[dict]:
     if pool:
         apply_mod.save_backups(pool)
     return pool or apply_mod.load_backups()
+
+
+def _no_servers_error() -> str:
+    """Понятное объяснение, почему подписка не дала серверов.
+
+    Панель почти всегда пишет причину человеческим языком прямо в имени
+    записи-заглушки — это единственная подсказка, которую пользователь
+    может понять и по которой может действовать.
+    """
+    base = "Подписка ответила, но рабочих серверов в ней нет."
+    if _last_notices:
+        quoted = "; ".join(dict.fromkeys(_last_notices))[:300]
+        return (f"{base}\nПровайдер пишет: «{quoted}»\n"
+                "Решите вопрос на стороне провайдера и повторите.")
+    return (base + "\nОбычно это значит, что подписка неактивна или "
+            "исчерпан лимит устройств — проверьте у провайдера.")
 
 
 # --- Онбординг ---------------------------------------------------------------
@@ -235,8 +259,7 @@ def setup_source(request: Request, link: str = Form(...)):
         n = len(_collect_backups())
         cfg = state.get()          # _collect_backups обновил last_count
         if n == 0:
-            return _redirect("/setup?step=2",
-                             err="Подписка не отдала ни одного рабочего сервера")
+            return _redirect("/setup?step=2", err=_no_servers_error())
     msg, err = _try_apply(cfg)
     if err:
         return _redirect("/setup?step=2", err=err)
@@ -555,6 +578,8 @@ def subscriptions_refresh(request: Request):
     if guard := _guard(request, cfg):
         return guard
     n = len(_collect_backups())
+    if n == 0:
+        return _redirect("/subscriptions", err=_no_servers_error())
     msg, err = _try_apply(state.get())
     return _redirect("/subscriptions",
                      msg=msg and f"Обновлено, серверов в резерве: {n}", err=err)
