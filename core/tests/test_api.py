@@ -51,11 +51,11 @@ def test_onboarding_with_own_server(client):
     _onboard(client)
     r = client.post("/setup/source", data={"link": VLESS},
                     follow_redirects=False)
-    assert "step=3" in r.headers["location"], r.headers["location"]
+    assert "step=5" in r.headers["location"], r.headers["location"]
 
     r = client.post("/setup/device", data={"name": "Айфон"},
                     follow_redirects=False)
-    assert "step=4" in r.headers["location"]
+    assert "step=6" in r.headers["location"]
 
     from splitbox.api import state
     cfg = state.get()
@@ -77,7 +77,7 @@ def test_bad_link_shows_error(client):
     _onboard(client)
     r = client.post("/setup/source", data={"link": "ftp://junk"},
                     follow_redirects=False)
-    assert "step=2" in r.headers["location"]
+    assert "step=4" in r.headers["location"]
     assert "err=" in r.headers["location"]
 
 
@@ -278,3 +278,50 @@ def test_stats_page_renders(client):
     _onboard(client)
     assert client.get("/stats").status_code == 200
     assert client.get("/stats?hours=168").status_code == 200
+
+
+def test_setup_mode_step(client):
+    """Режим спрашивается сразу после пароля: от него зависит, нужен ли
+    внешний адрес вообще."""
+    _onboard(client)
+    r = client.post("/setup/mode", data={"work_mode": "lan-only"},
+                    follow_redirects=False)
+    # домашнему шлюзу внешний адрес не нужен — шаг пропускается
+    assert "step=4" in r.headers["location"]
+    from splitbox.api import state
+    assert state.get().work_mode.value == "lan-only"
+
+    r = client.post("/setup/mode", data={"work_mode": "full"},
+                    follow_redirects=False)
+    assert "step=3" in r.headers["location"]
+    assert state.get().work_mode.value == "full"
+
+
+def test_setup_external_can_be_skipped(client):
+    _onboard(client)
+    client.post("/setup/mode", data={"work_mode": "full"})
+    r = client.post("/setup/external", data={"endpoint_host": ""},
+                    follow_redirects=False)
+    assert "step=4" in r.headers["location"] and "err=" not in r.headers["location"]
+    from splitbox.api import state
+    assert state.get().endpoint_host == ""      # пропуск не ломает настройку
+
+    client.post("/setup/external", data={"endpoint_host": " box.example.com "})
+    assert state.get().endpoint_host == "box.example.com"
+
+
+def test_work_mode_changeable_in_settings(client):
+    _onboard(client)
+    client.post("/settings", data={"work_mode": "full",
+                                   "endpoint_host": "1.2.3.4",
+                                   "wg_port": "51820", "wg_subnet": "10.99.0.0/24",
+                                   "keep_days": "14", "timezone": "UTC"})
+    from splitbox.api import state
+    assert state.get().work_mode.value == "full"
+
+
+def test_adguard_link_present(client):
+    _onboard(client)
+    html = client.get("/settings").text
+    assert ":3000" in html            # ссылка на интерфейс AdGuard
+    assert "admin" in html            # логин показан

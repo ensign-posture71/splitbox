@@ -150,3 +150,50 @@ def donut(rows: list[dict], size: int = 190) -> str:
               f'{html.escape(human_bytes(total))}</text>'
             + f'<text x="{cx}" y="{cy + 15}" fill="{TEXT}" font-size="10" '
               f'text-anchor="middle">всего</text></svg>')
+
+
+def sparkline(values: list[float], color: str = UP_COLOR, height: int = 42,
+              width: int = 460, fill: bool = True) -> str:
+    """Мини-график для карточки показателя: форма важнее точных значений,
+    поэтому ни осей, ни подписей — только линия и заливка."""
+    vals = [v or 0 for v in values]
+    if len(vals) < 2 or not any(vals):
+        return (f'<svg viewBox="0 0 {width} {height}" width="100%" '
+                f'height="{height}" role="img" aria-hidden="true">'
+                f'<line x1="0" y1="{height - 1}" x2="{width}" y2="{height - 1}" '
+                f'stroke="{GRID}" stroke-width="1"/></svg>')
+    peak = max(vals) or 1
+    n = len(vals)
+    pts = " ".join(
+        f"{width * i / (n - 1):.1f},{height - 2 - (height - 6) * v / peak:.1f}"
+        for i, v in enumerate(vals))
+    body = ""
+    if fill:
+        body += (f'<polygon points="{pts} {width},{height} 0,{height}" '
+                 f'fill="{color}" fill-opacity="0.14"/>')
+    body += (f'<polyline points="{pts}" fill="none" stroke="{color}" '
+             f'stroke-width="1.6"/>')
+    return (f'<svg viewBox="0 0 {width} {height}" width="100%" '
+            f'height="{height}" role="img" aria-hidden="true">{body}</svg>')
+
+
+def dual_sparkline(down: list[float], up: list[float], height: int = 64,
+                   width: int = 900) -> str:
+    """Две линии в одном поле — принято и отдано в одном масштабе."""
+    a, b = [v or 0 for v in down], [v or 0 for v in up]
+    if len(a) < 2 or not (any(a) or any(b)):
+        return ('<div class="hint" style="padding:14px 0">Пока нет данных</div>')
+    peak = max(max(a), max(b)) or 1
+    n = len(a)
+
+    def line(vals, color):
+        pts = " ".join(
+            f"{width * i / (n - 1):.1f},{height - 2 - (height - 8) * v / peak:.1f}"
+            for i, v in enumerate(vals))
+        return (f'<polygon points="{pts} {width},{height} 0,{height}" '
+                f'fill="{color}" fill-opacity="0.12"/>'
+                f'<polyline points="{pts}" fill="none" stroke="{color}" '
+                f'stroke-width="1.6"/>')
+    return (f'<svg viewBox="0 0 {width} {height}" width="100%" '
+            f'height="{height}" role="img" aria-label="Скорость сети">'
+            + line(a, DOWN_COLOR) + line(b, UP_COLOR) + "</svg>")

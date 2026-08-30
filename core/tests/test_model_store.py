@@ -66,3 +66,42 @@ def test_store_missing_file_gives_defaults(tmp_path):
 def test_migrate_rejects_newer_schema():
     with pytest.raises(ValueError, match="более новой версией"):
         store.migrate({"schema_version": SCHEMA_VERSION + 1})
+
+
+def test_tls_cert_generated_once(tmp_path):
+    from splitbox import tls
+    cert, key = tls.ensure_cert(tmp_path / "tls", ["10.0.0.1", "box.local"])
+    assert cert.exists() and oct(key.stat().st_mode)[-3:] == "600"
+    again, _ = tls.ensure_cert(tmp_path / "tls", [])
+    assert again.read_bytes() == cert.read_bytes()   # не перевыпускается
+
+
+def test_adguard_config_has_password_and_public_bind():
+    from splitbox import adguard
+    from splitbox.model import Config
+    cfg = Config()
+    cfg.adguard.password_bcrypt = adguard.make_password("secret")
+    data = adguard.default_config(cfg)
+    assert data["http"]["address"] == "0.0.0.0:3000"
+    assert data["users"][0]["name"] == "admin"
+
+
+def test_adguard_access_migrated_for_existing_install(tmp_path):
+    """Старая установка: конфиг на localhost и без пароля — должен
+    подтянуться к новым настройкам, не потеряв остального."""
+    import yaml
+    from splitbox import adguard
+    from splitbox.model import Config
+    conf = tmp_path / "conf"
+    conf.mkdir()
+    (conf / "AdGuardHome.yaml").write_text(yaml.safe_dump({
+        "http": {"address": "127.0.0.1:3000"}, "users": [],
+        "filters": [{"name": "мой список"}]}))
+    cfg = Config()
+    cfg.adguard.password_bcrypt = adguard.make_password("secret")
+    assert adguard.ensure_access(cfg, conf) is True
+    data = yaml.safe_load((conf / "AdGuardHome.yaml").read_text())
+    assert data["http"]["address"] == "0.0.0.0:3000"
+    assert data["users"][0]["name"] == "admin"
+    assert data["filters"][0]["name"] == "мой список"   # чужое не тронуто
+    assert adguard.ensure_access(cfg, conf) is False    # повторно не меняет

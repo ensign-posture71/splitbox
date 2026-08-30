@@ -3,9 +3,27 @@
 <form method="post" action="/settings">
 <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(400px,1fr))">
   <div class="card">
+    <div class="nm">Режим работы</div>
+    <div class="desc">Кого обслуживает коробка.</div>
+    <div class="seg" style="align-self:stretch;margin-top:10px">
+      {% for val, lbl in [('lan-only','домашний шлюз'), ('full','полноценный')] %}
+      <label class="sw" style="flex:1">
+        <input type="radio" name="work_mode" value="{{ val }}"
+               {{ 'checked' if cfg.work_mode.value == val }}>
+        <span class="s-{{ 'own' if val == 'lan-only' else 'fast' }}"
+              style="text-align:center">{{ lbl }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="hint" style="margin-top:8px">«Домашний шлюз» — только
+    локальная сеть, внешний адрес не нужен. «Полноценный» — плюс устройства
+    извне через WireGuard.</div>
+  </div>
+
+  <div class="card">
     <div class="nm">Доступ извне</div>
     <div class="desc">Адрес, по которому устройства находят коробку. Попадает
-    в конфиги WireGuard — без него QR-коды нерабочие.</div>
+    в конфиги WireGuard — без него QR-коды неполные.</div>
     <label class="hint" style="margin-top:10px">IP или домен
       <input type="text" name="endpoint_host" value="{{ cfg.endpoint_host }}"
              placeholder="1.2.3.4 или box.example.com" style="margin-top:4px"></label>
@@ -54,6 +72,23 @@
     <div class="hint" style="margin-top:6px">Данные хранятся только в коробке
     и никуда не отправляются. История посещений — вещь чувствительная,
     выключайте, если она вам не нужна.</div>
+  </div>
+
+  <div class="card">
+    <div class="nm">AdGuard — блокировка рекламы</div>
+    <div class="desc">Свой интерфейс: списки блокировок, журнал запросов,
+    статистика по клиентам.</div>
+    <table class="list" style="margin-top:8px">
+      <tr><td class="muted">адрес</td>
+          <td><a href="{{ adguard_url }}" target="_blank" rel="noopener"
+                 style="color:#f97316">{{ adguard_url }}</a></td></tr>
+      <tr><td class="muted">логин</td><td><code>{{ cfg.adguard.username }}</code></td></tr>
+      <tr><td class="muted">пароль</td>
+          <td><code>{{ cfg.adguard.password_plain or "задан вручную" }}</code></td></tr>
+    </table>
+    <div class="hint" style="margin-top:8px">Открывается по http — это его
+    собственный сервер. В режиме VPS порт наружу не публикуется: туда
+    попадают только через WireGuard.</div>
   </div>
 
   <div class="card">

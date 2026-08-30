@@ -146,3 +146,40 @@ def test_localhost_named_as_box(tmp_path, monkeypatch):
     importlib.reload(app_mod)
     assert app_mod._resolve_peer("127.0.0.1") == "коробка (проверка связи)"
     assert app_mod._resolve_peer("") == "неизвестно"
+
+
+def test_sysstats_snapshot_shape(tmp_path):
+    """Срез системы должен собираться целиком, даже если часть источников
+    недоступна (на не-Linux /proc нет вовсе)."""
+    from splitbox import sysstats
+    c = sysstats.SysCollector()
+    row = c.snapshot()
+    for key in ("ts", "cpu", "mem_used", "mem_total", "disk_used",
+                "disk_total", "net_rx", "net_tx", "tcp", "udp"):
+        assert key in row, key
+    assert row["cpu"] >= 0
+
+
+def test_sysstats_history_roundtrip(tmp_path):
+    from splitbox import stats, sysstats
+    conn = stats.connect(tmp_path / "s.db")
+    c = sysstats.SysCollector()
+    row = c.snapshot()
+    row.update({"cpu": 12.5, "mem_used": 100, "mem_total": 200,
+                "swap_used": 0, "swap_total": 0,
+                "disk_used": 5, "disk_total": 10,
+                "net_rx": 1000, "net_tx": 500, "tcp": 7, "udp": 2})
+    c.store(conn, row)
+    hist = sysstats.history(conn, 24)
+    assert hist and hist[-1]["cpu"] == 12.5 and hist[-1]["tcp"] == 7
+    s = sysstats.summary(conn, 24)
+    assert s["cpu_stat"]["peak"] == 12.5
+    assert "uptime" in s and "process" in s
+    conn.close()
+
+
+def test_human_uptime_formats():
+    from splitbox import sysstats
+    assert sysstats.human_uptime(90) == "1м"
+    assert sysstats.human_uptime(3700) == "1ч 1м"
+    assert sysstats.human_uptime(200000) == "2д 7ч"

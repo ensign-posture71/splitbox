@@ -40,6 +40,20 @@ class Mode(str, Enum):
     lan_gateway = "lan-gateway"
 
 
+class WorkMode(str, Enum):
+    """Режим работы в терминах пользователя — не путать с `mode`, который
+    описывает развёртывание (tproxy и host-сеть задаются установщиком).
+
+    lan_only — коробка обслуживает только локальную сеть; внешний адрес
+               не нужен, наружу ничего публиковать не надо;
+    full     — плюс устройства извне через WireGuard: телефон в поездке,
+               ноутбук в кафе. Нужен внешний адрес и проброс порта.
+    """
+
+    lan_only = "lan-only"
+    full = "full"
+
+
 class Policy(str, Enum):
     """Куда идёт трафик сервиса.
 
@@ -249,6 +263,20 @@ class Wireguard(_Model):
         raise ValueError("в WG-подсети не осталось свободных адресов")
 
 
+class AdGuard(_Model):
+    """Учётка веб-интерфейса AdGuard.
+
+    Пароль обязателен: интерфейс управляет DNS всей сети, и оставлять его
+    без входа, открыв порт, нельзя. Хэш bcrypt — другого формата AdGuard
+    не принимает.
+    """
+
+    username: str = "admin"
+    password_bcrypt: str = ""     # пусто = учётка ещё не создана
+    password_plain: str = ""      # показывается владельцу в панели
+    port: int = 3000
+
+
 class Dns(_Model):
     adblock: bool = True
     upstreams: list[str] = Field(default_factory=lambda: [
@@ -272,7 +300,9 @@ class Config(_Model):
     wireguard: Wireguard = Field(default_factory=Wireguard)
     dns: Dns = Field(default_factory=Dns)
     stats: Stats = Field(default_factory=Stats)
+    adguard: AdGuard = Field(default_factory=AdGuard)
     timezone: str = "Europe/Moscow"   # для подписей на графиках
+    work_mode: WorkMode = WorkMode.lan_only
 
     @model_validator(mode="after")
     def _peer_addresses_inside_subnet(self) -> "Config":
@@ -282,6 +312,12 @@ class Config(_Model):
                 raise ValueError(
                     f"адрес пира {peer.name} ({peer.address}) вне подсети {net}")
         return self
+
+    @property
+    def needs_external(self) -> bool:
+        """Нужен ли внешний адрес. В режиме «только локальная сеть» его
+        может не быть вовсе, и это не ошибка."""
+        return self.work_mode is WorkMode.full or self.mode is Mode.vps
 
     def enabled_own(self) -> list[OwnServer]:
         return [s for s in self.own_servers if s.enabled]
