@@ -91,24 +91,34 @@
     <div class="desc">Правильный способ: отдельная таблица маршрутизации
     с автоматическим возвратом, если коробка пропадёт.</div>
     <pre style="background:#101215;border:1px solid #23282f;border-radius:9px;
-         padding:11px;overflow-x:auto;font-size:12px;margin-top:8px"><code># маршрут в коробку; если она умрёт — трафик пойдёт обычным путём
-/ip route add dst-address=0.0.0.0/0 gateway={{ box_ip }} \
-    routing-table=splitbox check-gateway=ping distance=1
-/ip route add dst-address=0.0.0.0/0 gateway=WAN-ШЛЮЗ \
-    routing-table=splitbox distance=10
+         padding:11px;overflow-x:auto;font-size:12px;margin-top:8px"><code># 1. ОБЯЗАТЕЛЬНО: собственный трафик коробки не маркировать.
+# Без этого правила пакет, отправленный коробкой наружу, вернётся
+# на неё же — маршрутизация закольцуется и сеть встанет целиком.
+/ip firewall mangle add chain=prerouting action=accept     src-address={{ box_ip }}     place-before=[find where new-routing-mark~"." and chain="prerouting"]     comment="splitbox: без маркировки (иначе петля)"
 
-# заворачиваем в неё трафик локальной сети
-/ip firewall mangle add chain=prerouting in-interface-list=LAN \
-    action=mark-routing new-routing-mark=splitbox passthrough=no \
-    comment="splitbox"
+# 2. Если на роутере включён принудительный DNS — разрешить коробке
+#    ходить к внешним резолверам напрямую (иначе она не разрешит
+#    даже адрес вашего сервера).
+/ip firewall address-list add list=dns-allowed address={{ box_ip }}     comment="splitbox: прямой DNS разрешён"
 
-# fasttrack обходит маршрутизацию — исключаем помеченное
-/ip firewall filter set [find action=fasttrack-connection] \
-    routing-mark=no-mark</code></pre>
+# 3. Маршрут в коробку. check-gateway=ping + запасной маршрут:
+#    если коробка пропадёт, сеть сама вернётся к прямому выходу.
+/ip route add dst-address=0.0.0.0/0 gateway={{ box_ip }}     routing-table=splitbox check-gateway=ping distance=1
+/ip route add dst-address=0.0.0.0/0 gateway=WAN-ШЛЮЗ     routing-table=splitbox distance=10
+
+# 4. Заворачиваем трафик локальной сети
+/ip firewall mangle add chain=prerouting in-interface-list=LAN     action=mark-routing new-routing-mark=splitbox passthrough=no     comment="splitbox"
+
+# 5. fasttrack обходит маршрутизацию — исключаем помеченное
+/ip firewall filter set [find action=fasttrack-connection]     routing-mark=no-mark</code></pre>
     <div class="hint" style="margin-top:8px">Замените <code>WAN-ШЛЮЗ</code> на
     адрес шлюза провайдера (<code>/ip route print</code>, строка с
-    <code>0.0.0.0/0</code>). DNS переключается отдельно: в DHCP-сети
+    <code>0.0.0.0/0</code>). Порядок правил важен: пункты 1 и 2 должны
+    выполняться <b>до</b> пункта 4. DNS переключается отдельно: в DHCP-сети
     укажите <code>{{ box_ip }}</code>.</div>
+    <div class="hint" style="margin-top:6px"><b>Проверьте сразу после
+    включения</b> — откройте любой сайт с другого устройства. Если связи
+    нет, откат: <code>/ip route remove [find gateway={{ box_ip }}]</code>.</div>
   </div>
 
   <div class="card">
@@ -137,6 +147,26 @@
     спросите у провайдера белый адрес, обычно это платная опция.</div>
   </div>
   {% endif %}
+</div>
+
+<h2>Частые грабли</h2>
+<div class="card wide">
+  <table class="list">
+    <tr><th style="width:34%">Симптом</th><th>Причина и что делать</th></tr>
+    <tr><td>Интернет пропал целиком, но локальная сеть и VPN на работу
+        живы</td>
+        <td><b>Петля маршрутизации.</b> Собственный трафик коробки
+        заворачивается обратно на неё. Нужно правило-исключение для
+        <code>{{ box_ip }}</code> <b>выше</b> правила маркировки
+        (пункт 1 в командах для MikroTik).</td></tr>
+    <tr><td>Российские сайты открываются, заблокированные — нет</td>
+        <td>Коробка не может разрешить имя вашего сервера. Если на роутере
+        включён принудительный DNS — добавьте <code>{{ box_ip }}</code>
+        в список разрешённых (пункт 2).</td></tr>
+    <tr><td>Всё работает, но медленно</td>
+        <td>Проверьте, что fasttrack не обходит маркировку (пункт 5):
+        иначе часть соединений идёт мимо коробки.</td></tr>
+  </table>
 </div>
 
 <h2>Если что-то пошло не так</h2>
