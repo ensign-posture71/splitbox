@@ -125,3 +125,35 @@ def test_parse_manual_link_ok():
 def test_parse_manual_link_errors(link, err):
     with pytest.raises(ValueError, match=err):
         subs.parse_manual_link(link)
+
+
+def test_strip_meta_removes_internal_fields():
+    """Служебные поля не должны попасть в конфиг: sing-box не примет
+    незнакомые ключи."""
+    ob = subs.parse_payload(VLESS)[0]
+    assert "_name" in ob                      # при разборе имя сохраняется
+    assert "_name" not in subs.strip_meta(ob)
+
+
+def test_manual_link_has_no_internal_fields():
+    assert not any(k.startswith("_") for k in subs.parse_manual_link(VLESS))
+
+
+def test_notices_carry_provider_message(monkeypatch):
+    """Панель пишет причину отказа в имени заглушки — её надо донести
+    до пользователя, а не выбросить вместе с записью."""
+    stub = """
+proxies:
+  - {name: Вы превысили лимит устройств, type: vless, server: 0.0.0.0, port: 1, uuid: x}
+"""
+    monkeypatch.setattr(subs, "_fetch", lambda *a, **kw: stub)
+    r = subs.fetch_subscription("https://example/sub", hwid="h")
+    assert r.outbounds == []
+    assert "Вы превысили лимит устройств" in r.notices
+
+
+def test_notices_empty_when_all_alive(monkeypatch):
+    monkeypatch.setattr(subs, "_fetch", lambda *a, **kw: VLESS)
+    r = subs.fetch_subscription("https://example/sub")
+    assert len(r.outbounds) == 1 and r.notices == []
+    assert not any(k.startswith("_") for k in r.outbounds[0])
