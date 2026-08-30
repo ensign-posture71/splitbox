@@ -292,3 +292,38 @@ def human_bytes(n: float) -> str:
             return f"{n:.0f} {unit}" if unit in ("Б", "КБ") else f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} ТБ"
+
+
+def live_status(timeout: int = 3) -> dict:
+    """Что происходит прямо сейчас: сколько соединений открыто и через что.
+
+    Отдельно от истории: на странице статуса человек хочет видеть не
+    «за сутки», а «работает ли оно сию секунду». Источник тот же
+    clash_api, но без записи в базу.
+    """
+    out = {"alive": False, "connections": 0, "by_direction": {},
+           "up_total": 0, "down_total": 0}
+    try:
+        with urllib.request.urlopen(CLASH, timeout=timeout) as fh:
+            data = json.loads(fh.readline() or b"{}")
+    except (OSError, ValueError):
+        return out
+    conns = data.get("connections") or []
+    out["alive"] = True
+    out["connections"] = len(conns)
+    out["up_total"] = data.get("uploadTotal", 0)
+    out["down_total"] = data.get("downloadTotal", 0)
+    for c in conns:
+        d = direction((c.get("chains") or ["?"])[0])
+        out["by_direction"][d] = out["by_direction"].get(d, 0) + 1
+    return out
+
+
+def recent_speed(conn, minutes: int = 60) -> list[dict]:
+    """Скорость по минутам за последний час — для маленького графика."""
+    since = int(time.time() - minutes * 60)
+    conn.execute(sysstats.SCHEMA)
+    rows = conn.execute(
+        "SELECT ts, net_rx, net_tx FROM system WHERE ts >= ? ORDER BY ts",
+        (since,)).fetchall()
+    return [{"ts": r[0], "down": r[1], "up": r[2]} for r in rows]

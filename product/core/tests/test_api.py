@@ -355,3 +355,14 @@ def test_setup_ends_with_connect_step(client):
     html = client.get("/setup?step=8").text
     assert "направить трафик" in html
     assert "/connect" in html
+
+
+def test_status_page_shows_connection_and_speed(client):
+    """На «Статусе» должно быть видно, работает ли соединение прямо
+    сейчас, а не только «за сутки»."""
+    _onboard(client)
+    html = client.get("/").text
+    assert "СОЕДИНЕНИЕ" in html
+    # без sing-box рядом clash_api недоступен — честно показываем «нет связи»
+    assert "нет связи" in html
+    assert "за сутки" in html

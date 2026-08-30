@@ -396,8 +396,20 @@ def dashboard(request: Request):
         return guard
     tunnel = health.probe_tunnel()
     dns_ok = health.probe_dns()
+    live = stats.live_status()
+    conn = _stats_conn()
+    try:
+        speed = stats.recent_speed(conn, 60)
+        today = stats.totals(conn, 24)
+    finally:
+        conn.close()
+    now = speed[-1] if speed else {"down": 0, "up": 0}
     return _page(request, "dashboard.html", cfg,
-                 tunnel=tunnel, dns_ok=dns_ok,
+                 tunnel=tunnel, dns_ok=dns_ok, live=live, now=now,
+                 today=today,
+                 speed_chart=charts.dual_sparkline(
+                     [s["down"] for s in speed], [s["up"] for s in speed],
+                     height=54, width=760),
                  n_subs=len(cfg.enabled_subscriptions()),
                  n_backups=len(apply_mod.load_backups()))
 
