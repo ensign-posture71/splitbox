@@ -1,5 +1,43 @@
 {% extends "base.html" %}
 {% block content %}
+{% set fmt = human_bytes %}
+<div class="card wide" style="padding:14px 17px;margin-bottom:12px">
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <div class="mt">СОЕДИНЕНИЕ</div>
+      <div class="row" style="gap:10px;align-items:baseline;margin-top:3px">
+        <span class="mv {{ 'ok' if live.alive else 'bad' }}" style="font-size:24px">
+          {% if live.alive %}активно{% else %}нет связи{% endif %}
+        </span>
+        {% if live.alive %}
+        <span class="hint">{{ live.connections }}
+          {{ 'соединение' if live.connections % 10 == 1 and live.connections % 100 != 11
+             else 'соединения' if 2 <= live.connections % 10 <= 4 and not 12 <= live.connections % 100 <= 14
+             else 'соединений' }} открыто</span>
+        {% endif %}
+      </div>
+      {% if live.by_direction %}
+      <div class="row" style="gap:14px;margin-top:5px">
+        {% for d, n in live.by_direction.items() %}
+        <span class="hint"><span style="display:inline-block;width:8px;height:8px;
+          border-radius:2px;background:{{ direction_color.get(d, '#8b98a5') }};
+          margin-right:5px"></span>{{ direction_label.get(d, d) }}: <b>{{ n }}</b></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div style="text-align:right">
+      <div class="hint" style="margin:0">сейчас</div>
+      <div style="font:600 15px/1.4 ui-monospace,Menlo,monospace;color:#fff">
+        <span style="color:#f97316">↓ {{ fmt(now.down) }}/с</span><br>
+        <span style="color:#7dd3fc">↑ {{ fmt(now.up) }}/с</span>
+      </div>
+      <div class="hint" style="margin-top:4px">за сутки {{ fmt(today.total) }}</div>
+    </div>
+  </div>
+  <div style="margin:8px -17px -14px">{{ speed_chart|safe }}</div>
+</div>
+
 <div class="lights">
   <div class="light {{ 'ok' if tunnel.ok else 'bad' }}">
     <div class="t">Туннель</div>
