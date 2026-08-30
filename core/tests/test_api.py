@@ -366,3 +366,34 @@ def test_status_page_shows_connection_and_speed(client):
     # без sing-box рядом clash_api недоступен — честно показываем «нет связи»
     assert "нет связи" in html
     assert "за сутки" in html
+
+
+def test_stats_resolves_device_names(client, monkeypatch):
+    """В статистике у адресов должны появляться имена — из наших пиров
+    и из клиентов AdGuard."""
+    _onboard(client)
+    from splitbox.api import app as app_mod
+    monkeypatch.setattr(app_mod.adguard_mod, "clients",
+                        lambda cfg=None, timeout=5: {"192.168.1.50": "Телевизор"})
+    app_mod._peer_cache_at = 0          # сбросить кэш имён
+
+    rows = app_mod._with_names([{"peer": "192.168.1.50", "total": 1},
+                                {"peer": "10.9.9.9", "total": 1},
+                                {"peer": "Айфон", "total": 1}])
+    assert rows[0]["name"] == "Телевизор"     # имя из AdGuard
+    assert "name" not in rows[1]              # неизвестный адрес — без имени
+    assert "name" not in rows[2]              # уже имя — не трогаем
+
+
+def test_wg_peer_name_wins_over_adguard(client, monkeypatch):
+    """Имя, которое владелец дал устройству в коробке, важнее того,
+    что придумал роутер."""
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    client.post("/devices/add", data={"name": "Мой ноут"})
+    from splitbox.api import app as app_mod, state
+    addr = state.get().wireguard.peers[0].address
+    monkeypatch.setattr(app_mod.adguard_mod, "clients",
+                        lambda cfg=None, timeout=5: {addr: "имя-от-роутера"})
+    app_mod._peer_cache_at = 0
+    assert app_mod._resolve_peer(addr) == "Мой ноут"

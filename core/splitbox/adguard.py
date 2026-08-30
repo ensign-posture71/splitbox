@@ -18,10 +18,20 @@ import yaml
 
 from .model import Config
 
-# API дёргаем по http на localhost внутри стека: наружу этот порт всё
-# равно только редиректит на https, а внутри лишний TLS ни от кого не
-# защищает и потребовал бы доверия к самоподписанному сертификату.
-API = "http://127.0.0.1:3000"
+def _api(cfg: Config | None) -> str:
+    """Адрес API. С включённым force_https http-порт только перенаправляет,
+    поэтому ходим сразу на https — и не проверяем сертификат: он наш
+    собственный, самоподписанный, а соединение не покидает localhost."""
+    port = cfg.adguard.port_https if cfg else 3443
+    return f"https://127.0.0.1:{port}"
+
+
+def _ssl_ctx():
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 # schema_version намеренно старый из проверенных: AdGuard мигрирует старую
 # схему вверх сам, а слишком новую от чужой версии — отвергает.
@@ -103,11 +113,12 @@ def set_protection(enabled: bool, cfg: Config | None = None,
     headers = {"Content-Type": "application/json"}
     headers.update(_auth_header(cfg))
     req = urllib.request.Request(
-        f"{API}/control/protection",
+        f"{_api(cfg)}/control/protection",
         data=json.dumps({"enabled": enabled}).encode(),
         headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout,
+                                    context=_ssl_ctx()) as resp:
             return resp.status == 200
     except OSError:
         return False
@@ -115,10 +126,11 @@ def set_protection(enabled: bool, cfg: Config | None = None,
 
 def status(cfg: Config | None = None, timeout: int = 5) -> dict | None:
     """Состояние AdGuard или None, если он не отвечает."""
-    req = urllib.request.Request(f"{API}/control/status",
+    req = urllib.request.Request(f"{_api(cfg)}/control/status",
                                  headers=_auth_header(cfg))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout,
+                                    context=_ssl_ctx()) as resp:
             return json.load(resp)
     except (OSError, ValueError):
         return None
@@ -126,10 +138,11 @@ def status(cfg: Config | None = None, timeout: int = 5) -> dict | None:
 
 def counters(cfg: Config | None = None, timeout: int = 5) -> dict | None:
     """Счётчики фильтрации: сколько запросов и сколько из них заблокировано."""
-    req = urllib.request.Request(f"{API}/control/stats",
+    req = urllib.request.Request(f"{_api(cfg)}/control/stats",
                                  headers=_auth_header(cfg))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout,
+                                    context=_ssl_ctx()) as resp:
             return json.load(resp)
     except (OSError, ValueError):
         return None
@@ -185,3 +198,33 @@ def write_if_missing(cfg: Config, conf_dir: Path, cert: str = "",
         yaml.safe_dump(default_config(cfg, cert, key), fh, sort_keys=False)
     tmp.replace(path)
     return True
+
+
+def clients(cfg: Config | None = None, timeout: int = 5) -> dict[str, str]:
+    """Адрес устройства -> его имя, как их знает AdGuard.
+
+    Два источника: заданные владельцем (persistent) и определённые
+    автоматически по обратному DNS и DHCP-арендам роутера (auto_clients).
+    Первые важнее: имя, которое человек написал сам, точнее того, что
+    выдумал роутер.
+    """
+    req = urllib.request.Request(f"{_api(cfg)}/control/clients",
+                                 headers=_auth_header(cfg))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout,
+                                    context=_ssl_ctx()) as resp:
+            data = json.load(resp)
+    except (OSError, ValueError):
+        return {}
+
+    out: dict[str, str] = {}
+    for c in data.get("auto_clients") or []:
+        ip, name = c.get("ip"), (c.get("name") or "").strip()
+        if ip and name:
+            out[ip] = name.rstrip(".")
+    for c in data.get("clients") or []:          # заданные вручную — важнее
+        name = (c.get("name") or "").strip()
+        for ip in c.get("ids") or []:
+            if name and ip:
+                out[ip] = name
+    return out

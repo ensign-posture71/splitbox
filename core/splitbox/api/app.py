@@ -847,8 +847,13 @@ _peer_cache_at = 0.0
 def _resolve_peer(ip: str) -> str:
     """Адрес клиента -> человеческое имя устройства.
 
-    Кэш на полминуты: сборщик зовёт это на каждое соединение, а читать
-    config.yaml с диска по десять раз в секунду незачем.
+    Три источника по убыванию точности: наши WG-пиры (имя дал владелец),
+    клиенты AdGuard (заданные им же), автоматически определённые имена
+    из обратного DNS и DHCP-аренд роутера. Не нашли — показываем адрес,
+    это честнее выдуманного имени.
+
+    Кэш на полминуты: сборщик зовёт это на каждое соединение, а ходить
+    в AdGuard и читать config.yaml по десять раз в секунду незачем.
     """
     import time as _t
     global _peer_cache, _peer_cache_at
@@ -859,9 +864,31 @@ def _resolve_peer(ip: str) -> str:
         return "коробка (проверка связи)"
     if _t.monotonic() - _peer_cache_at > 30:
         cfg = state.get()
-        _peer_cache = {p.address: p.name for p in cfg.wireguard.peers}
+        names = adguard_mod.clients(cfg)
+        names.update({p.address: p.name for p in cfg.wireguard.peers})
+        _peer_cache = names
         _peer_cache_at = _t.monotonic()
     return _peer_cache.get(ip, ip)
+
+
+def _with_names(rows: list[dict]) -> list[dict]:
+    """Дописать имена к строкам статистики, где сохранён голый адрес.
+
+    В базе лежит то, что было известно на момент записи: у старых записей
+    это адрес. Разрешаем его при показе — иначе история навсегда осталась
+    бы безымянной.
+    """
+    import ipaddress
+    for r in rows:
+        peer = r.get("peer", "")
+        try:
+            ipaddress.ip_address(peer)
+        except ValueError:
+            continue                     # уже имя — ничего не делаем
+        name = _resolve_peer(peer)
+        if name != peer:
+            r["name"] = name
+    return rows
 
 
 def _stats_conn():
@@ -881,15 +908,17 @@ def stats_page(request: Request):
             "hours": hours,
             "peer": peer,
             "totals": stats.totals(conn, hours),
-            "peers": stats.by_peer(conn, hours),
+            "peers": _with_names(stats.by_peer(conn, hours)),
             "outbounds": stats.by_outbound(conn, hours)[:12],
             "directions": stats.by_direction(conn, hours),
-            "hosts": stats.top_hosts(conn, hours, peer=peer)
+            "hosts": _with_names(stats.top_hosts(conn, hours, peer=peer))
                      if cfg.stats.track_hosts else [],
             "chart": charts.area_chart(stats.series(conn, hours), hours,
                                        cfg.timezone),
             "donut": charts.donut(stats.by_direction(conn, hours)),
             "known_peers": stats.known_peers(conn, hours),
+            "peer_names": {p: _resolve_peer(p)
+                           for p in stats.known_peers(conn, hours)},
             "sys": sysstats.summary(conn, hours),
             "adguard": adguard_mod.status(cfg),
             "adguard_counters": adguard_mod.counters(cfg),
