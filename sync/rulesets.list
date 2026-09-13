@@ -1,72 +1,54 @@
-# =============================================================================
-# КОНФИГУРАТОР: какие сервисы идут в туннель
-# =============================================================================
-# Формат: «источник:набор». Строка раскомментирована — сервис в туннеле.
-# Удобнее править через веб-интерфейс: http://192.168.88.6:8088
-#
-# ИСТОЧНИКИ
-#   vernette   github.com/vernette/rulesets — заточен под Россию.
-#              Содержит и домены, И ПОДСЕТИ, поэтому покрывает протоколы
-#              без имени хоста (Telegram MTProto).
-#   metacubex  github.com/MetaCubeX/meta-rules-dat (~4.7k звёзд) — глобальный
-#              посервисный каталог, сотни наборов. Нужен ради гранулярности.
-#
-# ОБНОВЛЕНИЕ: sing-box качает наборы сам раз в сутки и кэширует на диск,
-# поэтому перезапуск не требует сети. Скриптов не нужно.
-# =============================================================================
+# Сгенерировано веб-интерфейсом http://192.168.88.6:8088
+# Формат: «источник:набор политика». own — только свой VPS,
+# fast — группа автовыбора (свой + резервные из подписки).
+# Закомментированная строка = сервис идёт напрямую, мимо туннеля.
 
-# --- Базовое для РФ ----------------------------------------------------------
-# Широкий набор: сервисы, которые сами блокируют российские адреса.
-# Именно он закрывает «а почему вот этот сайт не открылся» — и именно он
-# нужен для облаков IoT вроде Bosch Home Connect и Ubiquiti.
-vernette:unavailable-in-russia own
-
+# --- Базовое для РФ ---
+vernette:unavailable-in-russia fast
 # vernette:rkn own
-#   Реестр заблокированного в РФ. Огромный, с мусором (мошеннические сайты,
-#   спам). Для дома скорее вреден: нагрузка ради ненужного.
 
-# --- Мессенджеры (vernette — с подсетями) ------------------------------------
+# --- Мессенджеры ---
 vernette:telegram own
-vernette:whatsapp own
-vernette:discord-full own
+vernette:whatsapp fast
+vernette:discord-full fast
 # vernette:telegram-voice-chats own
 # vernette:discord-voice-chats own
 
-# --- Соцсети -----------------------------------------------------------------
-vernette:instagram own
-vernette:x own
-vernette:linkedin own
-vernette:tiktok own
-metacubex:facebook own
-metacubex:reddit own
+# --- Соцсети ---
+vernette:instagram fast
+# vernette:x own
+# vernette:linkedin own
+vernette:tiktok fast
+# metacubex:facebook own
+# metacubex:reddit own
 
-# --- Нейросети ---------------------------------------------------------------
+# --- Нейросети ---
 vernette:openai own
 vernette:claude own
+metacubex:anthropic own
 vernette:gemini own
 vernette:grok own
 vernette:copilot own
-metacubex:anthropic own
 
-# --- Видео и музыка ----------------------------------------------------------
+# --- Видео и музыка ---
 vernette:youtube fast
 vernette:netflix fast
 vernette:spotify fast
 metacubex:twitch fast
 metacubex:soundcloud fast
-# metacubex:disney fast
-# metacubex:hbo fast
-# metacubex:primevideo fast
-# metacubex:bbc fast
-# metacubex:imdb fast
+metacubex:disney fast
+metacubex:hbo fast
+metacubex:primevideo fast
+metacubex:bbc fast
+metacubex:imdb fast
 
-# --- Работа и разработка -----------------------------------------------------
-metacubex:notion own
-metacubex:figma own
-metacubex:canva own
-metacubex:github own
-metacubex:jetbrains own
-metacubex:docker fast
+# --- Работа и разработка ---
+metacubex:notion fast
+# metacubex:figma own
+# metacubex:canva own
+# metacubex:github own
+# metacubex:jetbrains own
+# metacubex:docker own
 # metacubex:atlassian own
 # metacubex:slack own
 # metacubex:zoom own
@@ -76,32 +58,33 @@ metacubex:docker fast
 # metacubex:heroku own
 # metacubex:digitalocean own
 
-# --- Платежи и покупки -------------------------------------------------------
+# --- Платежи и покупки ---
 metacubex:paypal own
 # metacubex:ebay own
 # metacubex:booking own
 # metacubex:airbnb own
 # metacubex:amazon own
 
-# --- Игры --------------------------------------------------------------------
-# metacubex:steam fast
-# metacubex:epicgames fast
-# metacubex:playstation fast
-# metacubex:xbox fast
-# metacubex:nintendo fast
+# --- Игры ---
+# metacubex:steam own
+# metacubex:epicgames own
+# metacubex:playstation own
+# metacubex:xbox own
+# metacubex:nintendo own
 
-# --- Обучение ----------------------------------------------------------------
-# metacubex:coursera fast
-# metacubex:udemy fast
-# metacubex:duolingo fast
+# --- Обучение ---
+# metacubex:coursera own
+# metacubex:udemy own
+# metacubex:duolingo own
 
-# --- Прочее ------------------------------------------------------------------
+# --- Прочее ---
 metacubex:medium own
 metacubex:patreon own
-metacubex:pornhub fast
+metacubex:pornhub own
 # metacubex:adobe own
-# metacubex:apple-music own
-# metacubex:apple-tvplus own
+metacubex:apple-music fast
+metacubex:apple-tvplus fast
 # metacubex:apple-update own
 # metacubex:microsoft own
 # metacubex:cloudflare own
+
