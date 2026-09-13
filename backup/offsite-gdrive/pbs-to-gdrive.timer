@@ -1,0 +1,11 @@
+[Unit]
+Description=Ежедневная выгрузка PBS в облако
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=pbs-to-gdrive.service
+
+[Install]
+WantedBy=timers.target

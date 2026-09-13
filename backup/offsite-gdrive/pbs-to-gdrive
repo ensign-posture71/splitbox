@@ -1,0 +1,19 @@
+#!/bin/bash
+# Выгрузка хранилища PBS в Google Drive через шифрованный remote.
+# Чанки PBS неизменяемы, поэтому синхронизация инкрементальная:
+# в облако уезжает только то, что появилось с прошлого раза.
+set -o pipefail
+SRC=/mnt/pve/netac/pbs
+DST=gcrypt:pbs
+LOG=/var/log/pbs-to-gdrive.log
+
+echo "=== $(date '+%F %T') старт ===" >> "$LOG"
+rclone sync "$SRC" "$DST" \
+  --transfers 8 --checkers 16 --fast-list \
+  --max-delete 500 \
+  --exclude '.lock' \
+  --stats 5m --stats-one-line \
+  --log-file "$LOG" --log-level INFO
+rc=$?
+echo "=== $(date '+%F %T') финиш, код $rc ===" >> "$LOG"
+exit $rc

@@ -1,0 +1,13 @@
+[gdrive]
+type = drive
+scope = drive
+token = <вырезано>
+
+[gcrypt]
+type = crypt
+password = <вырезано>
+password2 = <вырезано>
+filename_encryption = standard
+directory_name_encryption = true
+remote = gdrive:pve-backup
+
