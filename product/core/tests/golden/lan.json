@@ -117,19 +117,6 @@
         "outbound": "own-vps"
       },
       {
-        "rule_set": [
-          "mc-notion",
-          "vr-youtube"
-        ],
-        "outbound": "fast-out"
-      },
-      {
-        "rule_set": [
-          "vr-openai"
-        ],
-        "outbound": "own-vps"
-      },
-      {
         "ip_cidr": [
           "91.108.4.0/22"
         ],
@@ -150,6 +137,19 @@
         ],
         "domain_suffix": [
           ".example-own.com"
+        ],
+        "outbound": "own-vps"
+      },
+      {
+        "rule_set": [
+          "mc-notion",
+          "vr-youtube"
+        ],
+        "outbound": "fast-out"
+      },
+      {
+        "rule_set": [
+          "vr-openai"
         ],
         "outbound": "own-vps"
       }

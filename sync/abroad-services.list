@@ -36,19 +36,25 @@ huggingface.co own
 cursor.com own
 
 # --- Соцсети и мессенджеры [РФ] ----------------------------------------------
-instagram.com own
-cdninstagram.com own
+# Про пометки fast в этом файле (2026-09-13, D29). Раньше политику этих доменов
+# de facto задавали галочки из rulesets.list: их правило стояло выше, и запись
+# «own» здесь ни на что не влияла. Теперь свой список выше наборов, поэтому
+# написанное здесь исполняется буквально — и там, где трафик фактически шёл
+# через быструю группу (видео, мессенджеры), это записано явным fast.
+# Смысл не изменился: изменилось то, что файл перестал врать.
+instagram.com fast
+cdninstagram.com fast
 facebook.com own
-fbcdn.net own
+fbcdn.net fast
 threads.net own
 twitter.com own
 x.com own
 twimg.com own
 linkedin.com own
 licdn.com own
-discord.com own
-discordapp.com own
-discord.gg own
+discord.com fast
+discordapp.com fast
+discord.gg fast
 
 # --- YouTube [РФ] ------------------------------------------------------------
 # Был временно отключён, пока держалась O28: через TPROXY не открывался вовсе.
@@ -60,18 +66,18 @@ discord.gg own
 # добавить диапазоны Google в abroad с комментарием svc-net.
 # Цена этого решения выше, чем у Meta: через контейнер пойдёт заметно
 # больше трафика.
-youtube.com own
-youtu.be own
-ytimg.com own
-googlevideo.com own
-ggpht.com own
-youtubei.googleapis.com own
+youtube.com fast
+youtu.be fast
+ytimg.com fast
+googlevideo.com fast
+ggpht.com fast
+youtubei.googleapis.com fast
 
 # --- Медиа и подписки [ОН] ---------------------------------------------------
 spotify.com own
 scdn.co own
-netflix.com own
-nflxvideo.net own
+netflix.com fast
+nflxvideo.net fast
 patreon.com own
 medium.com own
 substack.com own
@@ -120,8 +126,8 @@ stripe.com own
 # недоступность приложению не мешает).
 
 # --- Мессенджеры [РФ] --------------------------------------------------------
-whatsapp.com own
-whatsapp.net own
+whatsapp.com fast
+whatsapp.net fast
 telegram.org own
 telegram.me own
 t.me own
@@ -150,12 +156,37 @@ rezka.ag fast
 hdrezka.ag fast
 nnmclub.to fast
 
+# RuTracker (2026-09-13, D29). Не входит ни в один из включённых наборов:
+# он есть только в vernette:rkn, а тот отключён сознательно (огромный, с мусором).
+# Поэтому до этой записи домены уходили в final=direct и упирались в блокировку.
+#
+# Политика own, а не fast, как у остальных трекеров: Cloudflare выдаёт
+# cf_clearance на пару «адрес выхода + User-Agent». Группа автовыбора меняет
+# сервер по задержке, и каждая смена обнуляет пройденную проверку.
+# Стабильный выход здесь важнее лишних мегабит.
+#
+# Суффиксного правила достаточно: поддомены покрываются автоматически,
+# отдельные записи под api.* не нужны.
+# ВНИМАНИЕ: api.rutracker.org, api.t-ru.org и t-ru.org В DNS НЕ СУЩЕСТВУЮТ —
+# проверено 2026-09-13 и локальным AdGuard, и внешним резолвером через туннель:
+# NXDOMAIN у первых двух, NOERROR без A-записи у третьего. Это не блокировка
+# и не поломка маршрута, их нельзя «починить» никакой настройкой.
+rutracker.org own
+rutracker.net own
+pornolab.net own
+# Добавлен владельцем через веб-интерфейс 2026-08-18 (найден при слиянии копий)
+hentaichan.live own
+
 # --- Прочее со скриншота -----------------------------------------------------
 grok.com own
 manus.im own
 notepad-plus-plus.org own
 pornhub.com fast
 phncdn.com fast
+# Заведены владельцем через панель коробки; возвращены в репозиторий 2026-09-13
+# при сверке (файл здесь и config.yaml коробки разъезжались — см. §6 HANDOFF).
+xhamster.com own
+apify.com own
 
 # --- FaceTime [ОН] -----------------------------------------------------------
 # Точечно, БЕЗ blanket apple.com (решение владельца остаётся в силе):

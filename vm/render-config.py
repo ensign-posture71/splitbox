@@ -172,7 +172,11 @@ def load_rulesets():
             "tag": tag,
             "format": "binary",
             "url": url_tpl.format(name),
-            "download_detour": "direct",
+            # Наборы качаются мимо туннеля. Было download_detour — в sing-box
+            # 1.14.0 опция объявлена устаревшей (удаление в 1.16.0) и заменена
+            # на http_client; предупреждение видно только в рантайме,
+            # `sing-box check` про неё молчит. Требует sing-box >= 1.14.
+            "http_client": {"detour": "direct"},
             "update_interval": RULESET_UPDATE,
         })
     return sets, tags

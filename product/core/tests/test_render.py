@@ -143,6 +143,24 @@ def test_ruleset_tags_prefixed(sample_config, backup_outbounds):
     assert tags == {"vr-youtube", "vr-openai", "mc-notion"}
 
 
+def test_own_lists_outrank_rulesets(sample_config, backup_outbounds):
+    """D29: свои домены и подсети — выше готовых наборов.
+
+    Правила читаются сверху вниз, побеждает первое совпавшее. Пока наборы
+    стояли выше, галочка напротив сервиса затирала переключатель напротив
+    своего домена: запись «own» существовала, но не исполнялась, и трафик
+    уходил через чужие серверы подписки. Тест фиксирует порядок, потому что
+    ошибка была бы невидимой — конфиг валиден в обоих вариантах.
+    """
+    rules = _rules(render.render_config(sample_config, backup_outbounds))
+    last_own = max(i for i, r in enumerate(rules)
+                   if r.get("domain") or r.get("ip_cidr"))
+    first_set = min(i for i, r in enumerate(rules) if r.get("rule_set"))
+    assert last_own < first_set, (
+        "готовый набор перебивает свой список: "
+        f"своё правило #{last_own}, набор #{first_set}")
+
+
 def test_golden_vps(sample_config, backup_outbounds):
     """Полный конфиг байт-в-байт: любое изменение рендера должно быть видно
     в диффе golden-файла, а не проскакивать незамеченным."""

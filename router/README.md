@@ -19,6 +19,8 @@
 | Файл | Что делает | Когда |
 |---|---|---|
 | `10-routing-tables.rsc` | `table_vps`, `table_work` + временный маршрут | сейчас |
+| `15-wg-work.rsc` | туннель wg-work: интерфейс, peer, маршруты, MSS clamp | через `apply-wg-work.sh` |
+| `16-wg-roaming-peers.rsc` | пиры wg0 устройств владельца (D24) | сейчас |
 | `20-address-lists.rsc` | `policy-exempt`, `abroad` (тест), `work` | сейчас |
 | `30-classifier.rsc` | mangle-классификатор + **фикс fasttrack** | сейчас |
 | `90-hygiene-antibrute.rsc` | оживление anti-brute правил | сейчас |
@@ -61,13 +63,22 @@ ssh admin@192.168.88.1 '/system scheduler remove [find where name="SAFETY-policy
 ssh admin@192.168.88.1 '/routing/table/print; /ip/route/print where routing-table=table_vps; /ip/firewall/mangle/print stats; /ip/firewall/filter/print where action=fasttrack-connection'
 ```
 
+В `table_vps` три маршрута по возрастанию distance: `192.168.88.9` (коробка
+Splitbox, CT 125, distance 1) → `192.168.88.6` (CT 121, distance 5) →
+fail-open прямо в WAN (distance 10). Активен первый живой по `check-gateway`.
+Диагностируя «трафик не доходит до sing-box», сперва посмотрите, **какой
+именно** шлюз сейчас активен: `/ip/route/print where routing-table=table_vps`.
+
 Ожидается: две таблицы, активный маршрут в `table_vps`, счётчики на правилах
 `policy 10`/`policy 11` растут при обращении LAN-клиента к `8.8.8.8`,
 у fasttrack появился `connection-mark=no-mark`.
 
 ## Что осталось незакрытым
 
-- `wg-work` не существует (D5) — правила `policy 20/21` созданы выключенными.
+- `wg-work` включён (D23) через маршруты в `main` — правила `policy 20/21`
+  остались выключенными навсегда: Вариант B положил `10/8` и `172.16/12`
+  в `policy-exempt`, и маркировка до них не доходит. Аудит трафика в туннель
+  и разбор безопасности — не сделаны.
 - Маршрут fail-open в `table_vps` держит DHCP-шлюз WAN жёстко (O8) — на шаге 4
   заменить на синхронизацию или netwatch.
 - §7.12: роуминговые клиенты `wg0` сейчас получают ту же классификацию, что и
