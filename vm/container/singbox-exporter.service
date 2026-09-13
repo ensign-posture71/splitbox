@@ -1,0 +1,17 @@
+# Экспортер трафика sing-box по outbound (D25). Ставится в
+# /etc/systemd/system/, скрипт — в /opt/vpn-config/vm/container/.
+# Не PartOf=sing-box: экспортер должен пережить перезапуск sing-box и
+# честно показать singbox_up=0, пока тот лежит (урок с PartOf — см. HANDOFF §7).
+[Unit]
+Description=sing-box per-outbound traffic exporter (Prometheus :9550)
+After=sing-box.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/vpn-config/vm/container/singbox-exporter.py
+Restart=on-failure
+RestartSec=10
+User=nobody
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target
