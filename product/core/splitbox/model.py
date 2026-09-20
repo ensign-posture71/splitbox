@@ -297,14 +297,17 @@ class Dns(_Model):
     передаёт ECS. AdGuard DNS, OpenDNS и подобные «семейные» резолверы — нет:
     они фильтруют. Каждый апстрим задан дважды, DoH и DoT: если один протокол
     у провайдера режется, остаётся второй.
+
+    Quad9 убран 2026-09-21 (O44). Формально он подходит, но с российской
+    линии рвёт соединение: десятки «unexpected EOF» по DoH и DoT за вечер.
+    AdGuard балансирует между апстримами, поэтому ненадёжный в списке даёт
+    не отказ, а орлянку — часть запросов молча не получает ответа.
     """
 
     adblock: bool = True
     upstreams: list[str] = Field(default_factory=lambda: [
         "https://dns.cloudflare.com/dns-query",
         "tls://one.one.one.one",
-        "https://dns.quad9.net/dns-query",
-        "tls://dns.quad9.net",
     ])
 
 

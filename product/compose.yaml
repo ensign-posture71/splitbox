@@ -7,12 +7,23 @@
 # один раз на gateway.
 name: splitbox
 
+# Предел на журналы контейнеров. Без него json-file растёт без конца:
+# sing-box на уровне info пишет по три строки на соединение, а через шлюз
+# идёт весь трафик сети. Замер на нагруженном шлюзе — 13 ГБ за десять
+# часов; постоянная запись держала гипервизор в ожидании диска (O45).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   init:
     build:
       context: .
       dockerfile: docker/app/Dockerfile
     image: splitbox-app
+    logging: *logging
     command: ["python", "-m", "splitbox.bootstrap"]
     environment:
       MODE: ${MODE:-vps}
@@ -25,6 +36,7 @@ services:
       context: .
       dockerfile: docker/gateway/Dockerfile
     image: splitbox-gateway
+    logging: *logging
     environment:
       MODE: ${MODE:-vps}
     ports:
@@ -42,6 +54,7 @@ services:
 
   adguard:
     image: adguard/adguardhome:v0.107.52
+    logging: *logging
     network_mode: service:gateway
     volumes:
       - state:/var/lib/splitbox
@@ -60,6 +73,7 @@ services:
       context: .
       dockerfile: docker/app/Dockerfile
     image: splitbox-app
+    logging: *logging
     network_mode: service:gateway
     environment:
       # Одноразовый токен первичной настройки (генерирует install.sh):
