@@ -35,11 +35,23 @@
 :local wgEndpoint "@@WG_WORK_ENDPOINT_HOST@@"
 :local wgEndPort @@WG_WORK_ENDPOINT_PORT@@
 
+# Свой исходящий порт. Задан явно, а не отдан RouterOS на откуп: порт входит
+# в отображение NAT на пути до работы, и однажды это отображение застряло —
+# туннель молчал 31 час, пакеты уходили с ether1, ответы не возвращались
+# вовсе (O48). Лечится сменой порта за пять секунд, поэтому он и вынесен
+# сюда отдельной строкой: если туннель молчит, а передача идёт — поставить
+# другое число и применить.
+:local wgListenPort 39472
+
 # --- 1. Интерфейс (MTU 1400 — из выданного конфига) --------------------------
 /interface wireguard
 :if ([:len [find where name="wg-work"]] = 0) do={
-  add name=wg-work mtu=1400 private-key=$wgPrivKey \
+  add name=wg-work mtu=1400 listen-port=$wgListenPort private-key=$wgPrivKey \
       comment="work: туннель на работу (D5), параметры из secrets/staff_lyurov2.conf"
+} else={
+  # Порт задаём и существующему интерфейсу: иначе он навсегда останется тем,
+  # что RouterOS выбрал при создании, и скрипт перестанет быть источником правды.
+  set [find where name="wg-work"] listen-port=$wgListenPort
 }
 
 # --- 2. Членство в списке WAN (NAT + защита от входящих, см. шапку) ----------
