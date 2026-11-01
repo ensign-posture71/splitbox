@@ -1,0 +1,31 @@
+{
+    admin off
+    auto_https off
+}
+
+http://:8090 {
+    encode zstd gzip
+    log {
+        output file /var/log/qbittorrent/access.log {
+            roll_size 20MiB
+            roll_keep 10
+            roll_keep_for 90d
+        }
+        format filter {
+            wrap console
+            fields {
+                request>headers>Authorization delete
+                request>headers>Cookie delete
+                request>headers>X-CSRF-Token delete
+                request>uri query {
+                    replace username REDACTED
+                    replace password REDACTED
+                }
+            }
+        }
+    }
+    reverse_proxy 127.0.0.1:8091 {
+        flush_interval -1
+        header_up Host 127.0.0.1:8091
+    }
+}

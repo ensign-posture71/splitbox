@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from splitbox import render
-from splitbox.model import Mode
+from splitbox.model import Mode, TorrentPolicy
 
 from conftest import KEY_C
 
@@ -41,6 +41,27 @@ def test_wireguard_endpoint(sample_config, backup_outbounds):
     assert ep["listen_port"] == 51820
     assert ep["peers"] == [{"public_key": KEY_C,
                             "allowed_ips": ["10.99.0.2/32"]}]
+
+
+def test_wireguard_torrent_policy_defaults_to_block(sample_config, backup_outbounds):
+    assert sample_config.wireguard.peers[0].torrent_policy is TorrentPolicy.block
+    cfg = render.render_config(sample_config, backup_outbounds)
+    torrent = next(r for r in _rules(cfg) if r.get("protocol") == ["bittorrent"])
+    assert torrent["source_ip_cidr"] == ["10.99.0.2/32"]
+    assert torrent["action"] == "reject"
+    order = [r.get("action") for r in _rules(cfg)]
+    assert order.index("sniff") < order.index("reject")
+
+
+def test_wireguard_torrent_direct_and_allow(sample_config, backup_outbounds):
+    sample_config.wireguard.peers[0].torrent_policy = TorrentPolicy.direct
+    cfg = render.render_config(sample_config, backup_outbounds)
+    torrent = next(r for r in _rules(cfg) if r.get("protocol") == ["bittorrent"])
+    assert torrent["outbound"] == "direct"
+
+    sample_config.wireguard.peers[0].torrent_policy = TorrentPolicy.allow
+    cfg = render.render_config(sample_config, backup_outbounds)
+    assert not any(r.get("protocol") == ["bittorrent"] for r in _rules(cfg))
 
 
 def test_hijack_dns_before_private(sample_config, backup_outbounds):

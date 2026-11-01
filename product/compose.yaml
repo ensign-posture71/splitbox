@@ -80,6 +80,11 @@ services:
       # пока пароль не установлен, мастер открывается только по ссылке
       # с этим токеном. Пусто = токен не требуется (домашняя установка).
       SPLITBOX_SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # Адрес и bearer-токен локального агента qBittorrent из .env.
+      QBITTORRENT_STATS_URL: ${QBITTORRENT_STATS_URL:-}
+      QBITTORRENT_STATS_TOKEN: ${QBITTORRENT_STATS_TOKEN:-}
+      # Ссылка на UI qBittorrent (опционально).
+      QBITTORRENT_WEB_UI_URL: ${QBITTORRENT_WEB_UI_URL:-}
     volumes:
       - state:/var/lib/splitbox
     depends_on:

@@ -28,9 +28,12 @@ from pathlib import Path
 from .. import adguard as adguard_mod
 from .. import apply as apply_mod
 from .. import catalog, charts, discovery, health, paths, stats, subs, sysstats, wg
+from .. import qbittorrent as qbittorrent_mod
 from .. import render as render_mod
+from .. import traffic as traffic_mod
 from ..model import (Balancer, Config, DomainRule, Mode, NetworkRule,
-                     OwnServer, Policy, Strategy, Subscription, WorkMode)
+                     OwnServer, Policy, Strategy, Subscription, TorrentPolicy,
+                     WorkMode)
 from . import auth, state
 
 log = logging.getLogger("splitbox.api")
@@ -533,6 +536,30 @@ def device_delete(request: Request, peer_id: str):
     return _redirect("/devices", msg=msg or "Устройство удалено", err=err)
 
 
+@app.post("/devices/{peer_id}/torrent-policy")
+def device_torrent_policy(request: Request, peer_id: str, policy: str = Form(...)):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    try:
+        mode = TorrentPolicy(policy)
+    except ValueError:
+        return _redirect("/devices", err="Неизвестная политика BitTorrent")
+
+    def update(c: Config):
+        peer = next((p for p in c.wireguard.peers if p.id == peer_id), None)
+        if not peer:
+            raise ValueError("устройство не найдено")
+        peer.torrent_policy = mode
+
+    try:
+        state.update(update)
+    except ValueError as exc:
+        return _redirect("/devices", err=str(exc))
+    msg, err = _try_apply(state.get())
+    return _redirect("/devices", msg=msg or "Политика BitTorrent сохранена", err=err)
+
+
 @app.get("/devices/{peer_id}/conf")
 def device_conf(request: Request, peer_id: str):
     cfg = state.get()
@@ -919,6 +946,7 @@ def stats_page(request: Request):
         return guard
     hours = min(max(int(request.query_params.get("hours", "24")), 1), 24 * 90)
     peer = request.query_params.get("peer", "")
+    torrents = qbittorrent_mod.fetch(hours)
     conn = _stats_conn()
     try:
         ctx = {
@@ -939,6 +967,8 @@ def stats_page(request: Request):
             "sys": sysstats.summary(conn, hours),
             "adguard": adguard_mod.status(cfg),
             "adguard_counters": adguard_mod.counters(cfg),
+            "torrents": torrents,
+            "torrent_ui_url": qbittorrent_mod.ui_url(),
         }
         h = ctx["sys"]["history"]
         ctx["spark"] = {
@@ -954,6 +984,18 @@ def stats_page(request: Request):
     finally:
         conn.close()
     return _page(request, "stats.html", cfg, **ctx)
+
+
+@app.get("/traffic", response_class=HTMLResponse)
+def traffic_page(request: Request):
+    cfg = state.get()
+    if guard := _guard(request, cfg):
+        return guard
+    live = traffic_mod.collect()
+    rows = live.get("connections") or []
+    for r in rows:
+        r["policy"] = traffic_mod.policy_for(r["source_ip"], cfg)
+    return _page(request, "traffic.html", cfg, **live, rows=rows)
 
 
 # --- Планировщик суточного refresh -------------------------------------------

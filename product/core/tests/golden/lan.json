@@ -103,6 +103,15 @@
         "action": "sniff"
       },
       {
+        "source_ip_cidr": [
+          "10.99.0.2/32"
+        ],
+        "protocol": [
+          "bittorrent"
+        ],
+        "action": "reject"
+      },
+      {
         "protocol": "dns",
         "action": "hijack-dns"
       },

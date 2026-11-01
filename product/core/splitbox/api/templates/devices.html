@@ -19,6 +19,16 @@
   <div class="card">
     <div class="nm">{{ p.name }}</div>
     <div class="desc"><code>{{ p.address }}</code> · добавлено {{ p.created[:10] }}</div>
+    <form method="post" action="/devices/{{ p.id }}/torrent-policy"
+          class="row" style="align-items:center;margin-top:10px">
+      <label class="hint" style="margin-bottom:0">BitTorrent</label>
+      <select name="policy" style="width:auto">
+        <option value="allow" {{ 'selected' if p.torrent_policy.value == 'allow' }}>Разрешить</option>
+        <option value="direct" {{ 'selected' if p.torrent_policy.value == 'direct' }}>Только напрямую</option>
+        <option value="block" {{ 'selected' if p.torrent_policy.value == 'block' }}>Блокировать</option>
+      </select>
+      <button type="submit">Сохранить</button>
+    </form>
     <details {{ 'open' if p.id == show }}>
       <summary class="hint" style="cursor:pointer">Показать QR и файл</summary>
       <div class="qr" style="margin-top:10px"><img src="/devices/{{ p.id }}/qr.svg" alt="QR"></div>

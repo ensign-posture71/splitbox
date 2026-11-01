@@ -1,0 +1,25 @@
+[Unit]
+Description=qBittorrent statistics agent for Splitbox
+After=network-online.target qbittorrent-nox.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qbit-stats
+Group=qbit-stats
+EnvironmentFile=/etc/qbit-stats.env
+WorkingDirectory=/opt/qbit-stats
+ExecStart=/usr/bin/python3 -m qbit_stats.agent
+Restart=always
+RestartSec=5
+StateDirectory=qbit-stats
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/qbit-stats
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

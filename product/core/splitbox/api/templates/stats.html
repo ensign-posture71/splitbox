@@ -112,6 +112,56 @@
 </div></div>
 
 <div class="card wide" style="padding:14px 16px">
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="nm" style="margin-bottom:0">qBittorrent · прямой канал</div>
+    {% if torrents.configured and torrents.available %}
+      <span class="tag ok">локальный учёт</span>
+    {% else %}
+      <span class="tag bad">нет данных</span>
+    {% endif %}
+  </div>
+  {% if torrents.configured and torrents.available %}
+    <div class="row" style="gap:16px;margin-top:8px;flex-wrap:wrap">
+      <span class="hint">сейчас ↓ <b>{{ fmt(torrents.current.down_speed) }}/с</b></span>
+      <span class="hint">↑ <b>{{ fmt(torrents.current.up_speed) }}/с</b></span>
+      <span class="hint">активно <b>{{ torrents.counts.active }}</b> из {{ torrents.counts.total }}</span>
+      <span class="hint">загрузок <b>{{ torrents.counts.downloading }}</b></span>
+      <span class="hint">раздач <b>{{ torrents.counts.seeding }}</b></span>
+    </div>
+    <div class="row" style="gap:16px;margin-top:8px;flex-wrap:wrap">
+      <span class="hint">за период ↓ <b>{{ fmt(torrents.totals.down) }}</b></span>
+      <span class="hint">↑ <b>{{ fmt(torrents.totals.up) }}</b></span>
+      <span class="hint">всего <b>{{ fmt(torrents.totals.total) }}</b></span>
+    </div>
+    {% if torrents.categories %}
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+        {% for row in torrents.categories[:12] %}
+          <span class="tag">{{ row.label }} {{ fmt(row.total) }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if torrents.tags %}
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+        {% for row in torrents.tags[:12] %}
+          <span class="tag muted">{{ row.label }} {{ fmt(row.total) }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="hint" style="margin-top:10px">Данные берутся напрямую из локального API qBittorrent.
+      Этот трафик не идёт через туннель и не учитывается в статистике sing-box.</div>
+    {% if torrent_ui_url %}
+      <a href="{{ torrent_ui_url }}" target="_blank" rel="noopener" class="btn ghost" style="margin-top:8px">Открыть qBittorrent</a>
+    {% endif %}
+  {% else %}
+    <div class="hint" style="margin-top:10px">
+      {% if torrents.configured %}{{ torrents.error or 'агент не отвечает' }}
+      {% else %}Агент qBittorrent не настроен. Прямой трафик не учитывается.
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="card wide" style="padding:14px 16px">
   <div class="nm">Нагрузка</div>
   {{ chart|safe }}
 </div>

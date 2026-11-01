@@ -68,6 +68,19 @@ class Policy(str, Enum):
     fast = "fast"
 
 
+class TorrentPolicy(str, Enum):
+    """Политика BitTorrent для внешнего WG-клиента.
+
+    allow  — обычная маршрутизация, детектор только наблюдает;
+    direct — подтверждённый BitTorrent принудительно идёт напрямую;
+    block  — подтверждённый BitTorrent отбрасывается.
+    """
+
+    allow = "allow"
+    direct = "direct"
+    block = "block"
+
+
 class Admin(_Model):
     """Доступ к вебке. Пароль хранится как scrypt-хэш (splitbox.auth)."""
 
@@ -239,6 +252,7 @@ class WgPeer(_Model):
     public_key: str
     address: str                     # адрес пира внутри WG-подсети, без маски
     created: str = ""                # ISO-8601
+    torrent_policy: TorrentPolicy = TorrentPolicy.block
 
 
 class Wireguard(_Model):

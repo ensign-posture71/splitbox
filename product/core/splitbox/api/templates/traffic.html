@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Трафик</h2>
+
+<div class="card wide">
+  {% if not alive %}
+    <p class="sub">sing-box недоступен. Наблюдение за живыми соединениями не работает.</p>
+  {% else %}
+    <div class="row" style="gap:16px;flex-wrap:wrap">
+      <span class="hint">активных соединений <b>{{ rows|length }}</b></span>
+      <span class="hint">отдано <b>{{ human_bytes(up_total) }}</b></span>
+      <span class="hint">принято <b>{{ human_bytes(down_total) }}</b></span>
+    </div>
+  {% endif %}
+</div>
+
+{% if rows %}
+<div class="card wide">
+  <div class="nm">Активные потоки</div>
+  <div class="trow header">
+    <div>клиент</div><div>назначение</div><div>протокол</div><div>outbound</div><div>объём</div><div>BitTorrent</div>
+  </div>
+  {% for r in rows %}
+    <div class="trow">
+      <div>{{ r.source_ip }}:{{ r.source_port }}</div>
+      <div>{{ r.destination_ip }}:{{ r.destination_port }}
+        {% if r.host %}<span class="hint">{{ r.host }}</span>{% endif %}
+      </div>
+      <div>{{ r.protocol }}</div>
+      <div>{{ r.outbound }}</div>
+      <div>↓ {{ human_bytes(r.down) }} · ↑ {{ human_bytes(r.up) }}</div>
+      <div>
+        {% if r.category == 'torrent' %}
+          <span class="tag bad">{{ r.confidence }}</span>
+        {% elif r.category == 'udp' %}
+          <span class="tag muted">подозрительный UDP</span>
+        {% else %}
+          <span class="tag muted">не классифицирован</span>
+        {% endif %}
+        {% if r.policy %}<span class="tag">{{ r.policy }}</span>{% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

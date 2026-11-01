@@ -1,0 +1,13 @@
+name: qbittorrent-audit
+services:
+  caddy:
+    image: caddy:2.11.4
+    container_name: qbittorrent-audit
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./logs:/var/log/qbittorrent
+      - ./data:/data
+      - ./config:/config

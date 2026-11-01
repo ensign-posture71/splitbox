@@ -16,7 +16,7 @@ from importlib import resources
 
 from . import catalog, subs
 from .subs import strip_meta
-from .model import Config, Mode, Policy, Strategy
+from .model import Config, Mode, Policy, Strategy, TorrentPolicy
 
 PLACEHOLDER = re.compile(r"\$\{(\w+)\}")
 
@@ -171,6 +171,30 @@ def _rewrite_outbound(rules: list[dict], src: str, dst: str) -> None:
             rule["outbound"] = dst
 
 
+def _torrent_rules(cfg: Config) -> list[dict]:
+    """Политика BitTorrent для каждого внешнего WG-клиента.
+
+    sing-box распознаёт BitTorrent TCP/uTP/UDP-трекер после action=sniff.
+    Правило привязано к адресу пира: блокировка одного устройства не
+    задевает LAN или другой WG-пир. Это не полный детектор обфусцированного
+    трафика, но он закрывает подтверждённый sing-box'ом класс протокола.
+    """
+    out: list[dict] = []
+    for peer in cfg.wireguard.peers:
+        if peer.torrent_policy is TorrentPolicy.allow:
+            continue
+        rule = {
+            "source_ip_cidr": [f"{peer.address}/32"],
+            "protocol": ["bittorrent"],
+        }
+        if peer.torrent_policy is TorrentPolicy.block:
+            rule["action"] = "reject"
+        else:
+            rule["outbound"] = "direct"
+        out.append(rule)
+    return out
+
+
 def _group(tag: str, members: list[dict], bal) -> dict:
     """Группа серверов по выбранной стратегии.
 
@@ -253,6 +277,11 @@ def render_config(cfg: Config, backups: list[dict] | None = None) -> dict:
                           "отметьте участие серверов в разделе «Серверы»")
 
     rules = config["route"]["rules"]
+    # BitTorrent-правила должны идти ПОСЛЕ sniff, иначе protocol ещё
+    # неизвестен. Первое правило шаблона — как раз action=sniff.
+    sniff_idx = next(i for i, r in enumerate(rules) if r.get("action") == "sniff")
+    rules = (rules[:sniff_idx + 1] + _torrent_rules(cfg)
+             + rules[sniff_idx + 1:])
     balancers = {"own": cfg.balancing.own, "fast": cfg.balancing.fast}
     resolved: dict[str, str] = {}
 

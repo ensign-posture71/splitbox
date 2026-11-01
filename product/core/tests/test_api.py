@@ -280,6 +280,33 @@ def test_stats_page_renders(client):
     assert client.get("/stats?hours=168").status_code == 200
 
 
+def test_traffic_page_renders(client):
+    _onboard(client)
+    assert client.get("/traffic").status_code == 200
+
+
+def test_traffic_page_shows_client_policy(client, monkeypatch):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    client.post("/devices/add", data={"name": "Ноут"})
+    from splitbox.api import state
+    peer = state.get().wireguard.peers[-1]
+    addr = peer.address
+    sample = {
+        "alive": True, "up_total": 1, "down_total": 2,
+        "connections": [{
+            "id": "test", "source_ip": addr, "source_port": 1,
+            "destination_ip": "1.2.3.4", "destination_port": 51413,
+            "protocol": "udp", "host": "", "outbound": "own", "up": 3,
+            "down": 4, "category": "torrent", "confidence": "high",
+        }],
+    }
+    from splitbox.api import app as app_mod
+    monkeypatch.setattr(app_mod.traffic_mod, "collect", lambda timeout=5: sample)
+    html = client.get("/traffic").text
+    assert "high" in html and "block" in html
+
+
 def test_setup_mode_step(client):
     """Режим спрашивается сразу после пароля: от него зависит, нужен ли
     внешний адрес вообще."""
@@ -397,3 +424,15 @@ def test_wg_peer_name_wins_over_adguard(client, monkeypatch):
                         lambda cfg=None, timeout=5: {addr: "имя-от-роутера"})
     app_mod._peer_cache_at = 0
     assert app_mod._resolve_peer(addr) == "Мой ноут"
+
+
+def test_device_torrent_policy(client):
+    _onboard(client)
+    client.post("/setup/source", data={"link": VLESS})
+    client.post("/devices/add", data={"name": "Ноут"})
+    from splitbox.api import state
+    peer = state.get().wireguard.peers[-1]
+    r = client.post(f"/devices/{peer.id}/torrent-policy", data={"policy": "direct"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    assert state.get().wireguard.peers[-1].torrent_policy.value == "direct"

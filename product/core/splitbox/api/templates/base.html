@@ -15,6 +15,7 @@
   {% set page = request.url.path %}
   <a href="/" class="{{ 'active' if page == '/' }}">Статус</a>
   <a href="/stats" class="{{ 'active' if page == '/stats' }}">Статистика</a>
+  <a href="/traffic" class="{{ 'active' if page == '/traffic' }}">Трафик</a>
   <a href="/services" class="{{ 'active' if page == '/services' }}">Сервисы</a>
   <a href="/devices" class="{{ 'active' if page == '/devices' }}">Устройства</a>
   <a href="/servers" class="{{ 'active' if page == '/servers' }}">Серверы</a>
