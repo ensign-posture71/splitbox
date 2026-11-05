@@ -223,3 +223,13 @@ courier.push.apple.com own
 #
 # steampowered.com     работает напрямую; включать только при проблемах
 # telegram.org         работает напрямую
+
+# Gemini: дата-плоскость и сигналинг веб-клиента. Без явной записи эти хосты
+# попадали в набор vr-unavailable-in-russia и уходили в группу «быстрый»,
+# то есть через чужие серверы подписки — Gemini отвечал «Что-то пошло не так. (1)».
+geminiweb-pa.clients6.google.com own
+signaler-pa.clients6.google.com own
+signaler-pa.googleapis.com own
+waa-pa.clients6.google.com own
+people-pa.googleapis.com own
+jnn-pa.googleapis.com own
