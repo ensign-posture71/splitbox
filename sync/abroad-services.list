@@ -233,3 +233,17 @@ signaler-pa.googleapis.com own
 waa-pa.clients6.google.com own
 people-pa.googleapis.com own
 jnn-pa.googleapis.com own
+
+# Antigravity и вход в Google-аккаунт: проверка доступности продукта идёт по
+# стране, ассоциированной с аккаунтом (FAQ Antigravity), а страница условий
+# Google показывает эту страну по IP. Пока вход шёл напрямую из РФ, Google
+# видел Россию — отсюда «account is ineligible, not available in your location».
+antigravity.google own
+antigravity-pa.googleapis.com own
+cloudcode-pa.googleapis.com own
+daily-cloudcode-pa.googleapis.com own
+accounts.google.com own
+myaccount.google.com own
+policies.google.com own
+oauth2.googleapis.com own
+apis.google.com own
