@@ -1,8 +1,10 @@
 # Контейнер app: веб-приложение splitbox (FastAPI).
 # Бинарь sing-box здесь ТОЛЬКО ради `sing-box check` в apply-пайплайне:
 # конфиг проверяется до того, как gateway попросят его перезагрузить.
-ARG SINGBOX_VERSION=v1.12.14
-FROM ghcr.io/sagernet/sing-box:${SINGBOX_VERSION} AS singbox
+# Тот же бинарь, что у gateway: схема конфига при `check` должна совпадать.
+# Патченная сборка подставляется снаружи: SINGBOX_IMAGE (O51).
+ARG SINGBOX_IMAGE=ghcr.io/sagernet/sing-box:v1.12.14
+FROM ${SINGBOX_IMAGE} AS singbox
 
 FROM python:3.13-slim
 # tzdata — для подписей времени на графиках: zoneinfo без системной базы

@@ -22,6 +22,8 @@ services:
     build:
       context: .
       dockerfile: docker/app/Dockerfile
+      args:
+        SINGBOX_IMAGE: ${SINGBOX_IMAGE:-ghcr.io/sagernet/sing-box:v1.12.14}
     image: splitbox-app
     logging: *logging
     command: ["python", "-m", "splitbox.bootstrap"]
@@ -35,6 +37,8 @@ services:
     build:
       context: .
       dockerfile: docker/gateway/Dockerfile
+      args:
+        SINGBOX_IMAGE: ${SINGBOX_IMAGE:-ghcr.io/sagernet/sing-box:v1.12.14}
     image: splitbox-gateway
     logging: *logging
     environment:
@@ -72,6 +76,8 @@ services:
     build:
       context: .
       dockerfile: docker/app/Dockerfile
+      args:
+        SINGBOX_IMAGE: ${SINGBOX_IMAGE:-ghcr.io/sagernet/sing-box:v1.12.14}
     image: splitbox-app
     logging: *logging
     network_mode: service:gateway
