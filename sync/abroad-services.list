@@ -28,6 +28,15 @@ claude.ai own
 gemini.google.com own
 aistudio.google.com own
 generativelanguage.googleapis.com own
+# Google AI: без этих бэкендов страница открывается, а сами запросы уходят
+# напрямую и вязнут (alkalimakersuite отвечал 2.9 с из РФ против 0.3 с через VPS).
+alkalimakersuite-pa.clients6.google.com own
+aisandbox-pa.googleapis.com own
+content-push.googleapis.com own
+geller-pa.googleapis.com own
+notebooklm.google.com own
+labs.google own
+deepmind.google own
 perplexity.ai own
 githubcopilot.com own
 copilot.microsoft.com own
